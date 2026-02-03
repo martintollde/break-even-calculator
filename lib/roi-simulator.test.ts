@@ -107,13 +107,12 @@ describe('simulateROI', () => {
     }
   });
 
-  test('cumulative revenue is monotonically increasing for ifWeWait', () => {
+  test('ifWeWait has zero revenue every month', () => {
     const result = simulateROI(inputs, scenario, config);
-    for (let i = 1; i < result.ifWeWait.length; i++) {
-      expect(result.ifWeWait[i].cumulativeRevenue).toBeGreaterThan(
-        result.ifWeWait[i - 1].cumulativeRevenue
-      );
-    }
+    result.ifWeWait.forEach(proj => {
+      expect(proj.revenue).toBe(0);
+      expect(proj.cumulativeRevenue).toBe(0);
+    });
   });
 
   test('ifWeDo has higher total revenue than ifWeWait', () => {

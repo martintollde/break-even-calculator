@@ -29,8 +29,8 @@ export function getDefaultConfig(roiCase: ROICase): ROISimulationConfig {
 /**
  * Simulates 12-month ROI projections comparing "if we act" vs "if we wait".
  *
- * ifWeDo: Ad spend ramps up over rampUpMonths, ROAS improves toward target.
- * ifWeWait: Baseline with zero ad spend growth (flat revenue from organic).
+ * ifWeDo: Ad spend ramps up over rampUpMonths toward full budget at target ROAS.
+ * ifWeWait: No paid media — zero revenue and zero profit.
  */
 export function simulateROI(
   inputs: ReverseInputs,
@@ -38,23 +38,18 @@ export function simulateROI(
   config: ROISimulationConfig
 ): ROISimulation {
   const months = 12;
-  const monthlyBudget = scenario.recommendedBudget / months;
+  const monthlyBudget = inputs.mediaBudget / months;
   const targetROAS = scenario.requiredROAS;
   const varianceMultiplier = 1 + (config.variancePercent / 100);
 
   // Adjusted ROAS with variance
   const adjustedROAS = targetROAS * varianceMultiplier;
 
-  // Baseline organic revenue (10% of revenue target spread monthly, no ad spend)
-  const baselineMonthlyRevenue = (inputs.revenueTarget * 0.1) / months;
-
   const ifWeDo: MonthlyProjection[] = [];
   const ifWeWait: MonthlyProjection[] = [];
 
   let cumulativeProfitDo = 0;
   let cumulativeRevenueDo = 0;
-  let cumulativeProfitWait = 0;
-  let cumulativeRevenueWait = 0;
   let breakEvenMonth = -1;
 
   for (let m = 0; m < months; m++) {
@@ -65,9 +60,9 @@ export function simulateROI(
 
     // "If we do" scenario
     const currentBudget = monthlyBudget * rampFactor;
-    const currentROAS = adjustedROAS * rampFactor;
+    const currentROAS = adjustedROAS;  // ROAS is independent of spend ramp
     const adRevenue = currentBudget * currentROAS;
-    const totalRevenue = adRevenue + baselineMonthlyRevenue;
+    const totalRevenue = adRevenue;
     const profitMargin = scenario.achievedProfitMargin;
     const grossProfit = adRevenue * profitMargin;
     const monthlyProfit = grossProfit - currentBudget;
@@ -85,21 +80,15 @@ export function simulateROI(
       cumulativeRevenue: cumulativeRevenueDo,
     });
 
-    // "If we wait" scenario - just organic baseline
-    const waitRevenue = baselineMonthlyRevenue;
-    const waitProfit = waitRevenue * profitMargin;
-
-    cumulativeProfitWait += waitProfit;
-    cumulativeRevenueWait += waitRevenue;
-
+    // "If we wait" scenario — no paid media, so zero revenue/profit
     ifWeWait.push({
       month: m + 1,
       label: MONTH_LABELS[m],
-      revenue: waitRevenue,
+      revenue: 0,
       adSpend: 0,
-      profit: waitProfit,
-      cumulativeProfit: cumulativeProfitWait,
-      cumulativeRevenue: cumulativeRevenueWait,
+      profit: 0,
+      cumulativeProfit: 0,
+      cumulativeRevenue: 0,
     });
 
     // Detect break-even month (first month where cumulative profit > 0)
@@ -108,8 +97,8 @@ export function simulateROI(
     }
   }
 
-  const totalRevenueDelta = cumulativeRevenueDo - cumulativeRevenueWait;
-  const totalProfitDelta = cumulativeProfitDo - cumulativeProfitWait;
+  const totalRevenueDelta = cumulativeRevenueDo;
+  const totalProfitDelta = cumulativeProfitDo;
   const totalAdSpend = ifWeDo.reduce((sum, p) => sum + p.adSpend, 0);
   const roi12Month = totalAdSpend > 0 ? (totalProfitDelta / totalAdSpend) * 100 : 0;
 
