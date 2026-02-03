@@ -1,5 +1,11 @@
-import { calculateBreakEven } from './calculations';
-import { CalculatorInput } from './types';
+import {
+  calculateBreakEven,
+  calculateReverse,
+  determineStatus,
+  getStatusMessages,
+} from './calculations';
+import { generateScenarios } from './scenarios';
+import { CalculatorInput, ReverseInputs } from './types';
 
 describe('Break-even Calculator - Beräkningsverifiering', () => {
 
@@ -595,6 +601,549 @@ describe('Break-even Calculator - Beräkningsverifiering', () => {
       // Nettovinst = 745.20 - 0 - 81 = 664.20
       // Break-even ROAS = 4500 / 664.20 = 6.776
       expect(result.breakEvenRoas).toBeCloseTo(6.776, 1);
+    });
+  });
+});
+
+// ============================================
+// REVERSE CALCULATOR TESTS
+// ============================================
+
+describe('Reverse Calculator - Bakåtberäkning', () => {
+
+  // Bas-ekonomi för de flesta tester
+  const baseEconomics: CalculatorInput = {
+    aov: 1000,
+    industry: 'other',
+    grossMargin: 50,
+    returnRate: 0,
+    shippingCost: 0,
+    paymentFee: 0,
+  };
+
+  // ============================================
+  // DETERMINE STATUS
+  // ============================================
+
+  describe('determineStatus - Statusbestämning', () => {
+
+    test('Achievable: requiredROAS under targetROAS', () => {
+      // breakEven = 2.0, target = 2.5
+      // required = 2.3 (under target, över breakeven)
+      const status = determineStatus(2.3, 2.0, 2.5);
+      expect(status).toBe('achievable');
+    });
+
+    test('Achievable: requiredROAS exakt lika med targetROAS', () => {
+      const status = determineStatus(2.5, 2.0, 2.5);
+      expect(status).toBe('achievable');
+    });
+
+    test('Achievable: requiredROAS exakt lika med breakEvenROAS', () => {
+      const status = determineStatus(2.0, 2.0, 2.5);
+      expect(status).toBe('achievable');
+    });
+
+    test('Tight: requiredROAS över targetROAS men över breakEven', () => {
+      // required = 3.0 > target = 2.5 > breakeven = 2.0
+      const status = determineStatus(3.0, 2.0, 2.5);
+      expect(status).toBe('tight');
+    });
+
+    test('Impossible: requiredROAS under breakEvenROAS', () => {
+      // required = 1.5 < breakeven = 2.0
+      const status = determineStatus(1.5, 2.0, 2.5);
+      expect(status).toBe('impossible');
+    });
+
+    test('Edge case: Mycket hög required ROAS', () => {
+      const status = determineStatus(10.0, 2.0, 2.5);
+      expect(status).toBe('tight');
+    });
+
+    test('Edge case: Mycket låg required ROAS', () => {
+      const status = determineStatus(0.5, 2.0, 2.5);
+      expect(status).toBe('impossible');
+    });
+  });
+
+  // ============================================
+  // GET STATUS MESSAGES
+  // ============================================
+
+  describe('getStatusMessages - Statusmeddelanden', () => {
+
+    test('Achievable: Returnerar rätt meddelande', () => {
+      const { statusMessage, statusDetails } = getStatusMessages('achievable', 2.3, 2.0, 2.5);
+
+      expect(statusMessage).toBe('✅ Realistiskt uppnåeligt');
+      expect(statusDetails).toContain('2.30x ROAS');
+      expect(statusDetails).toContain('break-even');
+      expect(statusDetails).toContain('god marginal');
+    });
+
+    test('Tight: Returnerar rätt meddelande', () => {
+      const { statusMessage, statusDetails } = getStatusMessages('tight', 3.0, 2.0, 2.5);
+
+      expect(statusMessage).toBe('⚠️ Utmanande men möjligt');
+      expect(statusDetails).toContain('3.00x ROAS');
+      expect(statusDetails).toContain('över ditt targetmål');
+      expect(statusDetails).toContain('sänka intäktsmålet');
+    });
+
+    test('Impossible: Returnerar rätt meddelande', () => {
+      const { statusMessage, statusDetails } = getStatusMessages('impossible', 1.5, 2.0, 2.5);
+
+      expect(statusMessage).toBe('❌ Omöjligt med nuvarande ekonomi');
+      expect(statusDetails).toContain('1.50x ROAS');
+      expect(statusDetails).toContain('under break-even');
+      expect(statusDetails).toContain('förlorar du pengar');
+    });
+  });
+
+  // ============================================
+  // CALCULATE REVERSE - GRUNDLÄGGANDE
+  // ============================================
+
+  describe('calculateReverse - Grundläggande beräkningar', () => {
+
+    test('Beräknar korrekt required ROAS', () => {
+      const input: ReverseInputs = {
+        revenueTarget: 1000000,  // 1 MSEK
+        mediaBudget: 250000,     // 250k
+        profitMarginGoal: 0.20,
+        economics: baseEconomics,
+      };
+
+      const result = calculateReverse(input);
+
+      // required ROAS = 1000000 / 250000 = 4.0
+      expect(result.requiredROAS).toBeCloseTo(4.0, 2);
+    });
+
+    test('Beräknar korrekt required COS', () => {
+      const input: ReverseInputs = {
+        revenueTarget: 1000000,
+        mediaBudget: 250000,
+        profitMarginGoal: 0.20,
+        economics: baseEconomics,
+      };
+
+      const result = calculateReverse(input);
+
+      // required COS = (1 / 4.0) * 100 = 25%
+      expect(result.requiredCOS).toBeCloseTo(25.0, 2);
+    });
+
+    test('Återanvänder framåt-beräkning för break-even ROAS', () => {
+      const input: ReverseInputs = {
+        revenueTarget: 1000000,
+        mediaBudget: 250000,
+        profitMarginGoal: 0.20,
+        economics: baseEconomics,
+      };
+
+      const result = calculateReverse(input);
+
+      // Med 50% marginal, inga kostnader: break-even ROAS = AOV / (AOV * 0.5) = 2.0
+      expect(result.breakEvenROAS).toBeCloseTo(2.0, 2);
+    });
+
+    test('Återanvänder framåt-beräkning för target ROAS', () => {
+      const input: ReverseInputs = {
+        revenueTarget: 1000000,
+        mediaBudget: 250000,
+        profitMarginGoal: 0.20,  // 20% vinstmarginal
+        economics: baseEconomics,
+      };
+
+      const result = calculateReverse(input);
+
+      // Med 20% vinst: target ROAS = 1000 / (500 * 0.80) = 2.5
+      expect(result.targetROAS).toBeCloseTo(2.5, 2);
+    });
+  });
+
+  // ============================================
+  // CALCULATE REVERSE - STATUS
+  // ============================================
+
+  describe('calculateReverse - Statusbestämning', () => {
+
+    test('Status achievable: Budget ger ROAS under target', () => {
+      const input: ReverseInputs = {
+        revenueTarget: 500000,
+        mediaBudget: 250000,  // required ROAS = 2.0 (= break-even)
+        profitMarginGoal: 0.20,
+        economics: baseEconomics,
+      };
+
+      const result = calculateReverse(input);
+      expect(result.status).toBe('achievable');
+    });
+
+    test('Status tight: Budget ger ROAS över target men över break-even', () => {
+      const input: ReverseInputs = {
+        revenueTarget: 1000000,
+        mediaBudget: 250000,  // required ROAS = 4.0 > target 2.5
+        profitMarginGoal: 0.20,
+        economics: baseEconomics,
+      };
+
+      const result = calculateReverse(input);
+      expect(result.status).toBe('tight');
+    });
+
+    test('Status impossible: Budget ger ROAS under break-even', () => {
+      const input: ReverseInputs = {
+        revenueTarget: 300000,
+        mediaBudget: 250000,  // required ROAS = 1.2 < break-even 2.0
+        profitMarginGoal: 0.20,
+        economics: baseEconomics,
+      };
+
+      const result = calculateReverse(input);
+      expect(result.status).toBe('impossible');
+    });
+  });
+
+  // ============================================
+  // GENERATE SCENARIOS
+  // ============================================
+
+  describe('generateScenarios - Scenariogenerering', () => {
+
+    test('Genererar tre scenarion', () => {
+      const input: ReverseInputs = {
+        revenueTarget: 1000000,
+        mediaBudget: 250000,
+        profitMarginGoal: 0.20,
+        economics: baseEconomics,
+      };
+
+      const forwardResult = calculateBreakEven({
+        ...baseEconomics,
+        desiredProfitMargin: 20,
+      });
+      const scenarios = generateScenarios(
+        input,
+        forwardResult.targetRoas,
+        forwardResult.netProfitPerOrder
+      );
+
+      expect(scenarios.maxRevenue).toBeDefined();
+      expect(scenarios.maxProfit).toBeDefined();
+      expect(scenarios.balance).toBeDefined();
+    });
+
+    test('maxRevenue scenario använder target ROAS med önskad vinstmarginal', () => {
+      const input: ReverseInputs = {
+        revenueTarget: 1000000,
+        mediaBudget: 250000,
+        profitMarginGoal: 0.20,
+        economics: baseEconomics,
+      };
+
+      const forwardResult = calculateBreakEven({
+        ...baseEconomics,
+        desiredProfitMargin: 20,
+      });
+      const scenarios = generateScenarios(
+        input,
+        forwardResult.targetRoas,
+        forwardResult.netProfitPerOrder
+      );
+
+      // maxRevenue använder target ROAS (2.5) och behåller vinstmarginal
+      expect(scenarios.maxRevenue.requiredROAS).toBeCloseTo(2.5, 2);
+      expect(scenarios.maxRevenue.achievedProfitMargin).toBe(0.20);
+      expect(scenarios.maxRevenue.label).toBe('Maximera omsättning');
+    });
+
+    test('maxProfit scenario använder 25% högre vinstmarginal', () => {
+      const input: ReverseInputs = {
+        revenueTarget: 1000000,
+        mediaBudget: 250000,
+        profitMarginGoal: 0.20,
+        economics: baseEconomics,
+      };
+
+      const forwardResult = calculateBreakEven({
+        ...baseEconomics,
+        desiredProfitMargin: 20,
+      });
+      const scenarios = generateScenarios(
+        input,
+        forwardResult.targetRoas,
+        forwardResult.netProfitPerOrder
+      );
+
+      // maxProfit använder 25% högre marginal: 0.20 × 1.25 = 0.25
+      expect(scenarios.maxProfit.achievedProfitMargin).toBeCloseTo(0.25, 2);
+      // ROAS blir högre pga högre marginal: AOV / (netProfit × (1 - 0.25))
+      expect(scenarios.maxProfit.requiredROAS).toBeGreaterThan(forwardResult.targetRoas);
+      expect(scenarios.maxProfit.label).toBe('Maximera vinst');
+    });
+
+    test('balance scenario använder target ROAS och full vinstmarginal', () => {
+      const input: ReverseInputs = {
+        revenueTarget: 1000000,
+        mediaBudget: 250000,
+        profitMarginGoal: 0.20,
+        economics: baseEconomics,
+      };
+
+      const forwardResult = calculateBreakEven({
+        ...baseEconomics,
+        desiredProfitMargin: 20,
+      });
+      const scenarios = generateScenarios(
+        input,
+        forwardResult.targetRoas,
+        forwardResult.netProfitPerOrder
+      );
+
+      // Balance använder target ROAS och når full vinstmarginal
+      expect(scenarios.balance.requiredROAS).toBeCloseTo(2.5, 2);
+      expect(scenarios.balance.achievedProfitMargin).toBe(0.20);
+      expect(scenarios.balance.label).toBe('Balanserad');
+      expect(scenarios.balance.isRecommended).toBe(true);
+    });
+
+    test('Balance scenario markeras som rekommenderat', () => {
+      const input: ReverseInputs = {
+        revenueTarget: 500000,
+        mediaBudget: 250000,
+        profitMarginGoal: 0.20,
+        economics: baseEconomics,
+      };
+
+      const forwardResult = calculateBreakEven({
+        ...baseEconomics,
+        desiredProfitMargin: 20,
+      });
+      const scenarios = generateScenarios(
+        input,
+        forwardResult.targetRoas,
+        forwardResult.netProfitPerOrder
+      );
+
+      // Balance är markerat som rekommenderat som default
+      expect(scenarios.balance.isRecommended).toBe(true);
+      expect(scenarios.maxRevenue.isRecommended).toBe(false);
+      expect(scenarios.maxProfit.isRecommended).toBe(false);
+    });
+  });
+
+  // ============================================
+  // CALCULATE REVERSE - VALIDERING
+  // ============================================
+
+  describe('calculateReverse - Validering', () => {
+
+    test('Kastar fel vid negativt intäktsmål', () => {
+      const input: ReverseInputs = {
+        revenueTarget: -100000,
+        mediaBudget: 250000,
+        profitMarginGoal: 0.20,
+        economics: baseEconomics,
+      };
+
+      expect(() => calculateReverse(input)).toThrow('Intäktsmålet måste vara större än 0');
+    });
+
+    test('Kastar fel vid noll mediabudget', () => {
+      const input: ReverseInputs = {
+        revenueTarget: 1000000,
+        mediaBudget: 0,
+        profitMarginGoal: 0.20,
+        economics: baseEconomics,
+      };
+
+      expect(() => calculateReverse(input)).toThrow('Mediabudgeten måste vara större än 0');
+    });
+
+    test('Kastar fel vid ogiltig vinstmarginal (>1)', () => {
+      const input: ReverseInputs = {
+        revenueTarget: 1000000,
+        mediaBudget: 250000,
+        profitMarginGoal: 1.5,  // 150% är ogiltigt
+        economics: baseEconomics,
+      };
+
+      expect(() => calculateReverse(input)).toThrow('Vinstmarginalen måste vara mellan 0 och 1');
+    });
+
+    test('Kastar fel vid negativ vinstmarginal', () => {
+      const input: ReverseInputs = {
+        revenueTarget: 1000000,
+        mediaBudget: 250000,
+        profitMarginGoal: -0.10,
+        economics: baseEconomics,
+      };
+
+      expect(() => calculateReverse(input)).toThrow('Vinstmarginalen måste vara mellan 0 och 1');
+    });
+
+    test('Kastar fel vid noll AOV', () => {
+      const input: ReverseInputs = {
+        revenueTarget: 1000000,
+        mediaBudget: 250000,
+        profitMarginGoal: 0.20,
+        economics: { ...baseEconomics, aov: 0 },
+      };
+
+      expect(() => calculateReverse(input)).toThrow('AOV måste vara större än 0');
+    });
+  });
+
+  // ============================================
+  // CALCULATE REVERSE - REALISTISKA SCENARION
+  // ============================================
+
+  describe('calculateReverse - Realistiska kundscenarier', () => {
+
+    test('Scenario: E-handelsföretag med tillväxtmål', () => {
+      const input: ReverseInputs = {
+        revenueTarget: 5000000,   // 5 MSEK intäktsmål
+        mediaBudget: 1000000,     // 1 MSEK mediabudget
+        profitMarginGoal: 0.15,   // 15% vinstmarginal
+        economics: {
+          aov: 800,
+          industry: 'ecommerce',
+          grossMargin: 55,
+          returnRate: 10,
+          shippingCost: 49,
+          paymentFee: 2.5,
+        },
+      };
+
+      const result = calculateReverse(input);
+
+      // required ROAS = 5000000 / 1000000 = 5.0
+      expect(result.requiredROAS).toBeCloseTo(5.0, 2);
+      expect(result.requiredCOS).toBeCloseTo(20.0, 2);
+
+      // Verifierar att status och meddelanden finns
+      expect(['achievable', 'tight', 'impossible']).toContain(result.status);
+      expect(result.statusMessage).toBeTruthy();
+      expect(result.statusDetails).toBeTruthy();
+
+      // Verifierar scenarion
+      expect(result.scenarios.maxRevenue).toBeDefined();
+      expect(result.scenarios.maxProfit).toBeDefined();
+      expect(result.scenarios.balance).toBeDefined();
+    });
+
+    test('Scenario: SaaS-företag med hög marginal', () => {
+      const input: ReverseInputs = {
+        revenueTarget: 2000000,
+        mediaBudget: 1200000,  // Justerad för att ge achievable status
+        profitMarginGoal: 0.30,  // 30% vinstmarginal
+        economics: {
+          aov: 500,
+          industry: 'saas',
+          grossMargin: 80,
+          returnRate: 5,
+          shippingCost: 0,
+          paymentFee: 2.5,
+        },
+      };
+
+      const result = calculateReverse(input);
+
+      // required ROAS = 2000000 / 1200000 = 1.67
+      expect(result.requiredROAS).toBeCloseTo(1.67, 2);
+
+      // Med 80% marginal och låga kostnader bör break-even vara låg (~1.36)
+      expect(result.breakEvenROAS).toBeLessThan(2.0);
+
+      // Med required ROAS (1.67) under target ROAS (~1.94) bör det vara achievable
+      expect(result.status).toBe('achievable');
+    });
+
+    test('Scenario: Lågmarginalprodukter - svårt att nå mål', () => {
+      const input: ReverseInputs = {
+        revenueTarget: 10000000,  // 10 MSEK
+        mediaBudget: 1500000,     // 1.5 MSEK
+        profitMarginGoal: 0.10,
+        economics: {
+          aov: 300,
+          industry: 'electronics',
+          grossMargin: 15,
+          returnRate: 12,
+          shippingCost: 0,
+          paymentFee: 2.0,
+        },
+      };
+
+      const result = calculateReverse(input);
+
+      // required ROAS = 10000000 / 1500000 = 6.67
+      expect(result.requiredROAS).toBeCloseTo(6.67, 2);
+
+      // Med låg marginal bör break-even vara hög
+      expect(result.breakEvenROAS).toBeGreaterThan(5.0);
+
+      // Bör vara tight eller impossible
+      expect(['tight', 'impossible']).toContain(result.status);
+    });
+  });
+
+  // ============================================
+  // ROUND-TRIP VERIFIERING
+  // ============================================
+
+  describe('Round-trip verifiering', () => {
+
+    test('Framåt → Bakåt: Konsistenta resultat', () => {
+      // Först: Kör framåt-beräkning
+      const forwardInput: CalculatorInput = {
+        aov: 1000,
+        industry: 'other',
+        grossMargin: 50,
+        returnRate: 0,
+        shippingCost: 0,
+        paymentFee: 0,
+        desiredProfitMargin: 20,
+      };
+
+      const forwardResult = calculateBreakEven(forwardInput);
+      // break-even = 2.0, target = 2.5
+
+      // Sen: Kör bakåt-beräkning med exakt target ROAS
+      // Om vi vill ha ROAS 2.5 och intäkt 1000000, budget = 1000000/2.5 = 400000
+      const reverseInput: ReverseInputs = {
+        revenueTarget: 1000000,
+        mediaBudget: 400000,  // Ger exakt ROAS 2.5
+        profitMarginGoal: 0.20,
+        economics: forwardInput,
+      };
+
+      const reverseResult = calculateReverse(reverseInput);
+
+      // Required ROAS ska matcha target ROAS
+      expect(reverseResult.requiredROAS).toBeCloseTo(forwardResult.targetRoas, 2);
+
+      // Break-even ska vara samma
+      expect(reverseResult.breakEvenROAS).toBeCloseTo(forwardResult.breakEvenRoas, 2);
+
+      // Target ska vara samma
+      expect(reverseResult.targetROAS).toBeCloseTo(forwardResult.targetRoas, 2);
+    });
+
+    test('COS är konsekvent invers av ROAS', () => {
+      const input: ReverseInputs = {
+        revenueTarget: 1000000,
+        mediaBudget: 200000,  // ROAS = 5.0
+        profitMarginGoal: 0.20,
+        economics: baseEconomics,
+      };
+
+      const result = calculateReverse(input);
+
+      // COS = (1 / ROAS) * 100
+      expect(result.requiredCOS).toBeCloseTo((1 / result.requiredROAS) * 100, 2);
     });
   });
 });
