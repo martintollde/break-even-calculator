@@ -9,7 +9,7 @@ Intern kalkylator för digital marknadsföringsbyrå som hjälper specialister b
 | **Live URL** | https://breakeven.martintollde.se |
 | **Repository** | github.com/martintollde/break-even-calculator |
 | **Hosting** | Vercel (auto-deploy vid push till main) |
-| **Tech Stack** | Next.js 14, TypeScript, Tailwind CSS, shadcn/ui |
+| **Tech Stack** | Next.js 14, TypeScript, Tailwind CSS, shadcn/ui, Recharts |
 
 ---
 
@@ -34,24 +34,41 @@ git push                     # Auto-deploy inom 1-2 min
 ```
 break-even-calculator/
 ├── app/
-│   ├── page.tsx              # Huvudsida med tab-navigation
-│   └── layout.tsx            # Layout med metadata
+│   ├── page.tsx              # Huvudsida med 4-tab navigation
+│   ├── layout.tsx            # Layout med metadata
+│   └── api/
+│       └── pitch/
+│           └── enhance/
+│               └── route.ts  # Claude API-route för AI pitch-förbättring
 ├── components/
 │   ├── calculator/
 │   │   ├── ForwardCalculator.tsx    # Framåt-kalkylator (break-even)
-│   │   ├── ReverseCalculator.tsx    # Bakåt-kalkylator (kravberäkning)
+│   │   ├── ReverseCalculator.tsx    # Bakåt-kalkylator (controlled)
+│   │   ├── PitchGenerator.tsx       # Pitch-script generator
 │   │   ├── StatusIndicator.tsx      # Visuell status (achievable/tight/impossible)
 │   │   ├── ScenarioComparison.tsx   # Tre scenarion för jämförelse
+│   │   ├── roi/
+│   │   │   ├── ROISimulator.tsx          # ROI-simulator huvudkomponent
+│   │   │   ├── RevenueComparisonChart.tsx # Intäktsjämförelse (LineChart)
+│   │   │   └── CumulativeProfitChart.tsx  # Kumulativ vinst (AreaChart)
 │   │   └── shared/
 │   │       └── EconomicsInputs.tsx  # Delad komponent för ekonomiska inputs
 │   └── ui/                          # shadcn/ui komponenter
+├── hooks/
+│   ├── useCalculator.ts      # Hook för framåt-kalkylatorn
+│   └── usePitchEnhance.ts    # Hook för AI pitch-förbättring
 ├── lib/
 │   ├── calculations.ts       # Beräkningslogik (framåt + bakåt)
 │   ├── calculations.test.ts  # 59 tester för beräkningar
 │   ├── scenarios.ts          # Scenario-generering för bakåt-kalkylatorn
 │   ├── scenarios.test.ts     # 34 tester för scenarion
+│   ├── roi-simulator.ts      # ROI-simuleringslogik
+│   ├── roi-simulator.test.ts # 25 tester för ROI-simulator
+│   ├── pitch-templates.ts    # Pitch-script template engine
+│   ├── pitch-templates.test.ts # 24 tester för pitch-templates
 │   ├── defaults.ts           # Bransch-defaults
 │   └── types.ts              # TypeScript interfaces
+├── .env.example              # Miljövariabler (ANTHROPIC_API_KEY)
 ├── PROJECT.md                # Denna fil
 └── package.json
 ```
@@ -230,9 +247,25 @@ Används när användaren inte anger egna värden:
 - [x] Delad EconomicsInputs-komponent för återanvändning
 - [x] 93 verifierade tester (59 beräkning + 34 scenarion)
 
+### Klart (v1.2 - Pitch Script Generator + ROI Simulator)
+
+- [x] 4-tab layout: Framåt, Bakåt, Pitch, ROI (responsiv 2x2 grid på mobil)
+- [x] State-lifting: Bakåt-kalkylatorns state lyft till app/page.tsx (delar data med Pitch/ROI)
+- [x] Pitch Script Generator (template-baserad)
+  - [x] Tre templates baserat på GoalStatus (achievable/tight/impossible)
+  - [x] Valfri kundkontext (företagsnamn, storlek, beslutsfattarens roll)
+  - [x] Kopiera pitch till clipboard
+  - [x] AI-förbättring via Claude API (valfritt, kräver ANTHROPIC_API_KEY)
+- [x] ROI Simulator (12-månaders projektion)
+  - [x] Tre scenarios: Pessimistiskt/Förväntat/Optimistiskt
+  - [x] Interaktiv intäktsjämförelse (Recharts LineChart)
+  - [x] Kumulativ vinstgraf med break-even markering (Recharts AreaChart)
+  - [x] Sammanfattningskort: intäktsökning, vinstökning, break-even månad, 12-mån ROI
+- [x] 142 verifierade tester (93 befintliga + 25 ROI + 24 pitch)
+
 ### Planerat
 
-**Fas 2: Utökad funktionalitet**
+**Fas 3: Utökad funktionalitet**
 - [ ] PDF-export med alla värden och antaganden
 - [ ] Integration med kampanjdata (visa faktisk vs target ROAS)
 - [ ] Automatisk alert när kampanj underperformar vs break-even
@@ -242,6 +275,29 @@ Används när användaren inte anger egna värden:
 - Bulk-beräkning för flera produktkategorier
 - Integration med Google Sheets för import/export
 - Möjlighet att spara kundprofiler med deras defaults
+
+---
+
+## Dataflöde (v1.2+)
+
+```
+app/page.tsx (Home)
+  ├── state: revenueTarget, mediaBudget, profitMarginGoal,
+  │          economics, reverseOutputs, selectedScenario
+  │
+  ├── Tab: Framåt → ForwardCalculator (egen state via useCalculator)
+  │
+  ├── Tab: Bakåt → ReverseCalculator (controlled)
+  │     callbacks: onRevenueTargetChange, onMediaBudgetChange, etc.
+  │
+  ├── Tab: Pitch → PitchGenerator
+  │     calls: generatePitchScript() (template, client-side)
+  │     optional: usePitchEnhance() → POST /api/pitch/enhance → Claude API
+  │
+  └── Tab: ROI → ROISimulator
+        calls: simulateROI() (ren funktion, client-side)
+        renders: RevenueComparisonChart + CumulativeProfitChart (Recharts)
+```
 
 ---
 

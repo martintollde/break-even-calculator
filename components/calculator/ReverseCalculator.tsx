@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { ChevronDown, ChevronUp, Calculator } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,8 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { CalculatorInput, ReverseInputs, ReverseOutputs, ScenarioName, Industry, industryLabels } from '@/lib/types';
-import { calculateReverse } from '@/lib/calculations';
+import { CalculatorInput, ReverseOutputs, ScenarioName, Industry, industryLabels } from '@/lib/types';
 import { industryDefaults } from '@/lib/defaults';
 import { EconomicsInputs } from './shared/EconomicsInputs';
 import { StatusIndicator } from './StatusIndicator';
@@ -31,7 +30,7 @@ import { InfoTooltip } from './InfoTooltip';
 // DEFAULT VALUES
 // ============================================
 
-const defaultEconomics: CalculatorInput = {
+export const defaultEconomics: CalculatorInput = {
   aov: 800,
   industry: 'ecommerce',
 };
@@ -98,104 +97,49 @@ function GoalInput({
 }
 
 // ============================================
-// MAIN COMPONENT
+// MAIN COMPONENT (CONTROLLED)
 // ============================================
+
+interface ReverseCalculatorProps {
+  revenueTarget: number;
+  mediaBudget: number;
+  profitMarginGoal: number;
+  economics: CalculatorInput;
+  outputs: ReverseOutputs | null;
+  selectedScenario: ScenarioName;
+  onRevenueTargetChange: (value: number) => void;
+  onMediaBudgetChange: (value: number) => void;
+  onProfitMarginGoalChange: (value: number) => void;
+  onEconomicsUpdate: <K extends keyof CalculatorInput>(key: K, value: CalculatorInput[K]) => void;
+  onEconomicsClear: (key: keyof CalculatorInput) => void;
+  onCalculate: () => void;
+  onScenarioSelect: (scenario: ScenarioName) => void;
+  error: string | null;
+}
 
 /**
  * ReverseCalculator - Bakåtkalkylator för att beräkna krav utifrån mål.
  *
- * Användaren anger:
- * - Intäktsmål (SEK)
- * - Mediabudget (SEK)
- * - Önskad vinstmarginal (%)
- * - Ekonomiska parametrar
- *
- * Kalkylatorn beräknar:
- * - Krävd ROAS
- * - Status (achievable/tight/impossible)
- * - Tre scenarion med olika strategier
+ * Now a controlled component - all state is managed by parent.
  */
-export function ReverseCalculator() {
-  // State för affärsmål
-  const [revenueTarget, setRevenueTarget] = useState<number>(10000000);
-  const [mediaBudget, setMediaBudget] = useState<number>(1000000);
-  const [profitMarginGoal, setProfitMarginGoal] = useState<number>(20);
-
-  // State för ekonomi
-  const [economics, setEconomics] = useState<CalculatorInput>(defaultEconomics);
-
-  // State för resultat
-  const [outputs, setOutputs] = useState<ReverseOutputs | null>(null);
-  const [selectedScenario, setSelectedScenario] = useState<ScenarioName>('balance');
-
-  // UI state
+export function ReverseCalculator({
+  revenueTarget,
+  mediaBudget,
+  profitMarginGoal,
+  economics,
+  outputs,
+  selectedScenario,
+  onRevenueTargetChange,
+  onMediaBudgetChange,
+  onProfitMarginGoalChange,
+  onEconomicsUpdate,
+  onEconomicsClear,
+  onCalculate,
+  onScenarioSelect,
+  error,
+}: ReverseCalculatorProps) {
+  // UI state (kept local - not needed by siblings)
   const [isEconomicsOpen, setIsEconomicsOpen] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Handlers för ekonomi
-  const handleUpdateEconomics = useCallback(<K extends keyof CalculatorInput>(
-    key: K,
-    value: CalculatorInput[K],
-  ) => {
-    setEconomics(prev => ({ ...prev, [key]: value }));
-    // Rensa resultat när ekonomi ändras
-    setOutputs(null);
-  }, []);
-
-  const handleClearEconomics = useCallback((key: keyof CalculatorInput) => {
-    setEconomics(prev => {
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-    setOutputs(null);
-  }, []);
-
-  // Beräkna
-  const handleCalculate = useCallback(() => {
-    setError(null);
-
-    try {
-      // Validera indata
-      if (revenueTarget <= 0) {
-        setError('Intäktsmålet måste vara större än 0');
-        return;
-      }
-      if (mediaBudget <= 0) {
-        setError('Mediabudgeten måste vara större än 0');
-        return;
-      }
-      if (profitMarginGoal < 0 || profitMarginGoal > 90) {
-        setError('Vinstmarginalen måste vara mellan 0 och 90%');
-        return;
-      }
-      if (!economics.aov || economics.aov <= 0) {
-        setError('AOV måste vara större än 0');
-        return;
-      }
-
-      const inputs: ReverseInputs = {
-        revenueTarget,
-        mediaBudget,
-        profitMarginGoal: profitMarginGoal / 100, // Konvertera till decimal
-        economics,
-      };
-
-      const result = calculateReverse(inputs);
-      setOutputs(result);
-
-      // Välj det rekommenderade scenariot automatiskt
-      if (result.scenarios.balance.isRecommended) {
-        setSelectedScenario('balance');
-      } else if (result.scenarios.maxProfit.isRecommended) {
-        setSelectedScenario('maxProfit');
-      } else if (result.scenarios.maxRevenue.isRecommended) {
-        setSelectedScenario('maxRevenue');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ett fel uppstod vid beräkning');
-    }
-  }, [revenueTarget, mediaBudget, profitMarginGoal, economics]);
 
   return (
     <div className="space-y-6">
@@ -213,7 +157,7 @@ export function ReverseCalculator() {
             <Label className="text-sm font-medium">Bransch</Label>
             <Select
               value={economics.industry}
-              onValueChange={(val) => handleUpdateEconomics('industry', val as Industry)}
+              onValueChange={(val) => onEconomicsUpdate('industry', val as Industry)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Välj bransch" />
@@ -234,7 +178,7 @@ export function ReverseCalculator() {
               label="Intäktsmål"
               tooltip="Önskad total omsättning från paid media under perioden."
               value={revenueTarget}
-              onChange={(val) => { setRevenueTarget(val); setOutputs(null); }}
+              onChange={onRevenueTargetChange}
               suffix="SEK"
               placeholder="t.ex. 10000000"
               min={0}
@@ -245,7 +189,7 @@ export function ReverseCalculator() {
               label="Mediabudget"
               tooltip="Total budget för paid media under perioden."
               value={mediaBudget}
-              onChange={(val) => { setMediaBudget(val); setOutputs(null); }}
+              onChange={onMediaBudgetChange}
               suffix="SEK"
               placeholder="t.ex. 1000000"
               min={0}
@@ -257,7 +201,7 @@ export function ReverseCalculator() {
             label="Önskad vinstmarginal"
             tooltip="Andel av nettovinsten som ska behållas efter annonskostnad. 20% är ett vanligt mål."
             value={profitMarginGoal}
-            onChange={(val) => { setProfitMarginGoal(val); setOutputs(null); }}
+            onChange={onProfitMarginGoalChange}
             suffix="%"
             placeholder="t.ex. 20"
             min={0}
@@ -274,7 +218,7 @@ export function ReverseCalculator() {
                 variant={profitMarginGoal === val ? 'default' : 'outline'}
                 size="sm"
                 className="text-xs"
-                onClick={() => { setProfitMarginGoal(val); setOutputs(null); }}
+                onClick={() => onProfitMarginGoalChange(val)}
               >
                 {val}%
               </Button>
@@ -311,8 +255,8 @@ export function ReverseCalculator() {
             <CardContent>
               <EconomicsInputs
                 inputs={economics}
-                onUpdate={handleUpdateEconomics}
-                onClear={handleClearEconomics}
+                onUpdate={onEconomicsUpdate}
+                onClear={onEconomicsClear}
                 showCalculateButton={false}
                 compact={true}
                 showProfitMargin={false}
@@ -326,7 +270,7 @@ export function ReverseCalculator() {
       <Button
         size="lg"
         className="w-full"
-        onClick={handleCalculate}
+        onClick={onCalculate}
         disabled={!economics.aov || economics.aov <= 0 || revenueTarget <= 0 || mediaBudget <= 0}
       >
         <Calculator className="h-4 w-4 mr-2" />
@@ -357,7 +301,7 @@ export function ReverseCalculator() {
             <ScenarioComparison
               scenarios={outputs.scenarios}
               selectedScenario={selectedScenario}
-              onSelectScenario={setSelectedScenario}
+              onSelectScenario={onScenarioSelect}
             />
           </div>
         </>

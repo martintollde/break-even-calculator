@@ -70,6 +70,66 @@ export const industryLabels: Record<Industry, string> = {
 };
 
 // ============================================
+// PITCH SCRIPT GENERATOR TYPES
+// ============================================
+
+export interface ClientContext {
+  companyName?: string;
+  industry: Industry;
+  companySize?: 'startup' | 'smb' | 'enterprise';
+  decisionMakerRole?: 'ceo' | 'cmo' | 'marketingManager' | 'other';
+  currentAdSpend?: number;
+  currentROAS?: number;
+}
+
+export interface PitchScript {
+  opening: string;
+  problem: string;
+  solution: string;
+  objectionHandling: string[];
+  closing: string;
+}
+
+export interface PitchEnhanceRequest {
+  script: PitchScript;
+  context: ClientContext;
+  reverseInputs: ReverseInputs;
+  reverseOutputs: ReverseOutputs;
+  selectedScenario: ScenarioName;
+}
+
+// ============================================
+// ROI SIMULATOR TYPES
+// ============================================
+
+export type ROICase = 'worst' | 'expected' | 'best';
+
+export interface MonthlyProjection {
+  month: number;
+  label: string;
+  revenue: number;
+  adSpend: number;
+  profit: number;
+  cumulativeProfit: number;
+  cumulativeRevenue: number;
+}
+
+export interface ROISimulation {
+  ifWeDo: MonthlyProjection[];
+  ifWeWait: MonthlyProjection[];
+  totalRevenueDelta: number;
+  totalProfitDelta: number;
+  breakEvenMonth: number;
+  roi12Month: number;
+}
+
+export interface ROISimulationConfig {
+  case: ROICase;
+  rampUpMonths: number;
+  variancePercent: number;
+}
+
+// ============================================
 // REVERSE CALCULATOR TYPES
 // ============================================
 
