@@ -650,20 +650,22 @@ describe('Reverse Calculator - Bakåtberäkning', () => {
       expect(status).toBe('tight');
     });
 
-    test('Impossible: requiredROAS under breakEvenROAS', () => {
-      // required = 1.5 < breakeven = 2.0
+    test('Achievable: requiredROAS under breakEvenROAS', () => {
+      // required = 1.5 < breakeven = 2.0, but still under target = 2.5
       const status = determineStatus(1.5, 2.0, 2.5);
-      expect(status).toBe('impossible');
+      expect(status).toBe('achievable');
     });
 
-    test('Edge case: Mycket hög required ROAS', () => {
+    test('Impossible: Mycket hög required ROAS (över 2× target)', () => {
+      // required = 10.0 > target × 2 = 5.0
       const status = determineStatus(10.0, 2.0, 2.5);
-      expect(status).toBe('tight');
+      expect(status).toBe('impossible');
     });
 
-    test('Edge case: Mycket låg required ROAS', () => {
+    test('Achievable: Mycket låg required ROAS', () => {
+      // required = 0.5 < target = 2.5
       const status = determineStatus(0.5, 2.0, 2.5);
-      expect(status).toBe('impossible');
+      expect(status).toBe('achievable');
     });
   });
 
@@ -687,17 +689,17 @@ describe('Reverse Calculator - Bakåtberäkning', () => {
 
       expect(statusMessage).toBe('⚠️ Utmanande men möjligt');
       expect(statusDetails).toContain('3.00x ROAS');
-      expect(statusDetails).toContain('över ditt targetmål');
-      expect(statusDetails).toContain('sänka intäktsmålet');
+      expect(statusDetails).toContain('över targetmålet');
+      expect(statusDetails).toContain('optimera aggressivt');
     });
 
     test('Impossible: Returnerar rätt meddelande', () => {
-      const { statusMessage, statusDetails } = getStatusMessages('impossible', 1.5, 2.0, 2.5);
+      const { statusMessage, statusDetails } = getStatusMessages('impossible', 10.0, 2.0, 2.5);
 
       expect(statusMessage).toBe('❌ Omöjligt med nuvarande ekonomi');
-      expect(statusDetails).toContain('1.50x ROAS');
-      expect(statusDetails).toContain('under break-even');
-      expect(statusDetails).toContain('förlorar du pengar');
+      expect(statusDetails).toContain('10.00x ROAS');
+      expect(statusDetails).toContain('orealistiskt högt');
+      expect(statusDetails).toContain('dubbla targetmålet');
     });
   });
 
@@ -794,10 +796,22 @@ describe('Reverse Calculator - Bakåtberäkning', () => {
       expect(result.status).toBe('tight');
     });
 
-    test('Status impossible: Budget ger ROAS under break-even', () => {
+    test('Status achievable: Budget ger ROAS under break-even (men under target)', () => {
       const input: ReverseInputs = {
         revenueTarget: 300000,
-        mediaBudget: 250000,  // required ROAS = 1.2 < break-even 2.0
+        mediaBudget: 250000,  // required ROAS = 1.2 ≤ target 2.5
+        profitMarginGoal: 0.20,
+        economics: baseEconomics,
+      };
+
+      const result = calculateReverse(input);
+      expect(result.status).toBe('achievable');
+    });
+
+    test('Status impossible: Mycket högt ROAS-krav (över 2× target)', () => {
+      const input: ReverseInputs = {
+        revenueTarget: 5000000,
+        mediaBudget: 250000,  // required ROAS = 20.0 > target × 2 = 5.0
         profitMarginGoal: 0.20,
         economics: baseEconomics,
       };
@@ -1085,8 +1099,8 @@ describe('Reverse Calculator - Bakåtberäkning', () => {
       // Med låg marginal bör break-even vara hög
       expect(result.breakEvenROAS).toBeGreaterThan(5.0);
 
-      // Bör vara tight eller impossible
-      expect(['tight', 'impossible']).toContain(result.status);
+      // Required ROAS (6.67) under target ROAS (~9.92) → achievable
+      expect(result.status).toBe('achievable');
     });
   });
 

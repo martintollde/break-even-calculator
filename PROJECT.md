@@ -150,9 +150,9 @@ Target ROAS = AOV / (Nettovinst × (1 - vinstmarginal))
 Break-even ROAS = AOV / Nettovinst
 
 # Status
-achievable: Required ROAS < Target ROAS (grön)
-tight: Target ROAS ≤ Required ROAS < Break-even ROAS × 1.5 (orange)
-impossible: Required ROAS ≥ Break-even ROAS × 1.5 (röd)
+achievable: Required ROAS ≤ Target ROAS (grön)
+tight: Target ROAS < Required ROAS ≤ Target ROAS × 2 (orange)
+impossible: Required ROAS > Target ROAS × 2 (röd)
 
 # Tre scenarion
 1. Balanserad: Optimal mix av omsättning och vinst

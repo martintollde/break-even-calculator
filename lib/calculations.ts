@@ -133,9 +133,9 @@ export function calculateBreakEven(input: CalculatorInput): CalculatorOutput {
  * Bestämmer om målet är uppnåeligt baserat på ROAS-krav.
  *
  * Logik:
- * - requiredROAS < breakEvenROAS → 'impossible' (förlorar pengar på varje order)
- * - requiredROAS <= targetROAS → 'achievable' (når vinstmarginal)
- * - requiredROAS > targetROAS → 'tight' (över break-even men under målmarginal)
+ * - requiredROAS <= targetROAS → 'achievable' (full lönsamhet möjlig)
+ * - requiredROAS <= targetROAS × 2 → 'tight' (ambitiöst men möjligt med optimering)
+ * - requiredROAS > targetROAS × 2 → 'impossible' (orealistiskt högt ROAS-krav)
  *
  * @param requiredROAS - ROAS som krävs för att nå intäktsmålet
  * @param breakEvenROAS - ROAS för att gå +/- 0
@@ -147,18 +147,18 @@ export function determineStatus(
   breakEvenROAS: number,
   targetROAS: number
 ): GoalStatus {
-  // Om required ROAS är under break-even är det omöjligt att gå med vinst
-  if (requiredROAS < breakEvenROAS) {
-    return 'impossible';
-  }
-
-  // Om required ROAS är under eller lika med target har vi marginal att jobba med
+  // Under eller lika med target ROAS → full lönsamhet möjlig
   if (requiredROAS <= targetROAS) {
     return 'achievable';
   }
 
-  // Över target men under break-even - utmanande men möjligt
-  return 'tight';
+  // Upp till 2× target → ambitiöst men möjligt med optimering
+  if (requiredROAS <= targetROAS * 2) {
+    return 'tight';
+  }
+
+  // Över 2× target → orealistiskt högt ROAS-krav
+  return 'impossible';
 }
 
 /**
@@ -190,13 +190,13 @@ export function getStatusMessages(
     case 'tight':
       return {
         statusMessage: '⚠️ Utmanande men möjligt',
-        statusDetails: `Ditt krav på ${formatRoas(requiredROAS)}x ROAS ligger ${marginAboveTarget.toFixed(0)}% över ditt targetmål (${formatRoas(targetROAS)}x). Du kommer gå med vinst men inte nå önskad vinstmarginal. Överväg att sänka intäktsmålet eller öka budgeten.`,
+        statusDetails: `Ditt krav på ${formatRoas(requiredROAS)}x ROAS ligger ${marginAboveTarget.toFixed(0)}% över targetmålet (${formatRoas(targetROAS)}x). Du behöver optimera aggressivt eller justera målen.`,
       };
 
     case 'impossible':
       return {
         statusMessage: '❌ Omöjligt med nuvarande ekonomi',
-        statusDetails: `Ditt krav på ${formatRoas(requiredROAS)}x ROAS ligger under break-even (${formatRoas(breakEvenROAS)}x). Med dessa siffror förlorar du pengar på varje försäljning. Förbättra marginalen, sänk kostnaderna, eller justera målen.`,
+        statusDetails: `Ditt krav på ${formatRoas(requiredROAS)}x ROAS är orealistiskt högt (mer än dubbla targetmålet ${formatRoas(targetROAS)}x). Sänk intäktsmålet eller öka budgeten.`,
       };
   }
 }
