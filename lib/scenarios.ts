@@ -3,15 +3,11 @@ import {
   ReverseScenario,
   ScenarioSet,
 } from './types';
+
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
 
-/**
- * Formaterar ett belopp i svensk valuta.
- * @param amount - Belopp i SEK
- * @returns Formaterad sträng med SEK, inga decimaler
- */
 export function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('sv-SE', {
     style: 'currency',
@@ -21,22 +17,12 @@ export function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-/**
- * Formaterar ett procentvärde med tecken.
- * @param value - Värde som decimal (t.ex. 0.25 för 25%)
- * @returns Formaterad sträng med +/- tecken, en decimal, %
- */
 export function formatPercent(value: number): string {
   const percent = value * 100;
   const sign = percent >= 0 ? '+' : '';
   return `${sign}${percent.toFixed(1)}%`;
 }
 
-/**
- * Formaterar ett procentvärde utan tecken.
- * @param value - Värde som decimal (t.ex. 0.25 för 25%)
- * @returns Formaterad sträng med en decimal, %
- */
 export function formatPercentNoSign(value: number): string {
   const percent = value * 100;
   return `${percent.toFixed(1)}%`;
@@ -47,183 +33,164 @@ export function formatPercentNoSign(value: number): string {
 // ============================================
 
 /**
- * Beräknar target ROAS för en given vinstmarginal.
- * targetROAS = AOV / (netProfitPerOrder × (1 - profitMargin))
- */
-function calculateTargetRoasForMargin(
-  aov: number,
-  netProfitPerOrder: number,
-  profitMargin: number
-): number {
-  if (netProfitPerOrder <= 0) return Infinity;
-  const profitRetention = 1 - profitMargin;
-  if (profitRetention <= 0) return Infinity;
-  return aov / (netProfitPerOrder * profitRetention);
-}
-
-/**
- * Genererar tre scenarion för bakåt-kalkylatorn.
+ * Generates three distinct scenarios for the reverse calculator.
  *
- * Scenarion:
- * - balance: Rekommenderat - Optimal balans mellan omsättning och vinst
- * - maxRevenue: Högsta möjliga omsättning med bibehållen vinstmarginal
- * - maxProfit: Högsta vinstmarginal genom reducerad budget
- *
- * @param inputs - Användarens indata med affärsmål och ekonomiska parametrar
- * @param targetROAS - Target ROAS från framåt-beräkning
- * @param netProfitPerOrder - Nettovinst per order
- * @returns ScenarioSet med tre scenarion
+ * Scenario 1 - budgetForTarget: Budget required to reach revenue target at target ROAS
+ * Scenario 2 - maxRevenueGivenBudget: Max revenue given current budget at target ROAS
+ * Scenario 3 - maxProfitGivenMinRevenue: Max profit given minimum acceptable revenue
  */
 export function generateScenarios(
   inputs: ReverseInputs,
   targetROAS: number,
-  netProfitPerOrder: number
+  netProfitPerOrder: number,
+  contributionBeforeAds: number,
+  targetImpossible: boolean,
 ): ScenarioSet {
   const { revenueTarget, mediaBudget, profitMarginGoal, economics } = inputs;
   const aov = economics.aov;
+  const minRevenuePercent = inputs.minRevenuePercent ?? 80;
 
   // ========================================
-  // BALANCE SCENARIO (Rekommenderat)
+  // SCENARIO 1: Budget krävd för att nå revenue target med önskad marginal
   // ========================================
-  // Optimal balans: Når både omsättningsmål och önskad vinstmarginal
-  // genom att justera budget till target ROAS
+  const s1Budget = isFinite(targetROAS) && targetROAS > 0
+    ? revenueTarget / targetROAS
+    : Infinity;
+  const s1Revenue = revenueTarget;
+  const s1COS = isFinite(targetROAS) ? (1 / targetROAS) * 100 : 0;
+  const s1Orders = aov > 0 ? s1Revenue / aov : 0;
+  const s1AdCostPerOrder = isFinite(targetROAS) && targetROAS > 0 ? aov / targetROAS : 0;
+  const s1ProfitPerOrder = contributionBeforeAds - s1AdCostPerOrder;
+  const s1Profit = s1Orders * s1ProfitPerOrder;
 
-  const balanceBudget = revenueTarget / targetROAS;
-  const balanceRevenue = revenueTarget;
-  const balanceCOS = isFinite(targetROAS) ? (1 / targetROAS) * 100 : 0;
-
-  const balance: ReverseScenario = {
-    name: 'balance',
-    label: 'Balanserad',
-    recommendedBudget: balanceBudget,
-    expectedRevenue: balanceRevenue,
+  const budgetForTarget: ReverseScenario = {
+    name: 'budgetForTarget',
+    label: 'Budget för mål',
+    recommendedBudget: isFinite(s1Budget) ? s1Budget : mediaBudget,
+    expectedRevenue: s1Revenue,
     requiredROAS: targetROAS,
-    requiredCOS: balanceCOS,
+    requiredCOS: s1COS,
     achievedProfitMargin: profitMarginGoal,
-    budgetDelta: balanceBudget - mediaBudget,
-    budgetDeltaPercent: ((balanceBudget - mediaBudget) / mediaBudget) * 100,
+    budgetDelta: (isFinite(s1Budget) ? s1Budget : mediaBudget) - mediaBudget,
+    budgetDeltaPercent: isFinite(s1Budget)
+      ? ((s1Budget - mediaBudget) / mediaBudget) * 100
+      : 0,
     revenueDelta: 0,
     revenueDeltaPercent: 0,
-    profitDelta: calculateProfitDelta(balanceRevenue, aov, netProfitPerOrder, profitMarginGoal),
+    profitDelta: isFinite(s1Profit) ? s1Profit : 0,
     isRecommended: true,
-    reasoning: `Optimal balans mellan omsättning och vinst med target ROAS ${targetROAS.toFixed(1)}x. Uppnår både omsättningsmål och önskad vinstmarginal på ${formatPercentNoSign(profitMarginGoal)}.`,
+    reasoning: targetImpossible
+      ? `Önskad marginal överstiger täckningsbidrag. Target ROAS kan inte beräknas.`
+      : `Kräver budget på ${formatCurrency(isFinite(s1Budget) ? s1Budget : 0)} för att nå ${formatCurrency(revenueTarget)} med target ROAS ${targetROAS.toFixed(1)}x och marginal ${formatPercentNoSign(profitMarginGoal)}.`,
   };
 
   // ========================================
-  // MAX REVENUE SCENARIO
+  // SCENARIO 2: Max revenue givet nuvarande budget och target ROAS
   // ========================================
-  // Högsta möjliga omsättning med bibehållen vinstmarginal
-  // Kräver potentiellt högre budget
+  const s2Revenue = isFinite(targetROAS) ? mediaBudget * targetROAS : 0;
+  const s2Budget = mediaBudget;
+  const s2COS = isFinite(targetROAS) ? (1 / targetROAS) * 100 : 0;
+  const s2Orders = aov > 0 ? s2Revenue / aov : 0;
+  const s2AdCostPerOrder = isFinite(targetROAS) && targetROAS > 0 ? aov / targetROAS : 0;
+  const s2ProfitPerOrder = contributionBeforeAds - s2AdCostPerOrder;
+  const s2Profit = s2Orders * s2ProfitPerOrder;
+  const s2RevenueDelta = s2Revenue - revenueTarget;
+  const s2RevenueDeltaPercent = revenueTarget > 0 ? (s2RevenueDelta / revenueTarget) * 100 : 0;
 
-  const maxRevenueBudget = revenueTarget / targetROAS;
-  const maxRevenueRevenue = revenueTarget;
-  const maxRevenueCOS = isFinite(targetROAS) ? (1 / targetROAS) * 100 : 0;
-  const maxRevenueBudgetDeltaPercent = ((maxRevenueBudget - mediaBudget) / mediaBudget) * 100;
-
-  const maxRevenue: ReverseScenario = {
-    name: 'maxRevenue',
-    label: 'Maximera omsättning',
-    recommendedBudget: maxRevenueBudget,
-    expectedRevenue: maxRevenueRevenue,
+  const maxRevenueGivenBudget: ReverseScenario = {
+    name: 'maxRevenueGivenBudget',
+    label: 'Max omsättning',
+    recommendedBudget: s2Budget,
+    expectedRevenue: s2Revenue,
     requiredROAS: targetROAS,
-    requiredCOS: maxRevenueCOS,
+    requiredCOS: s2COS,
     achievedProfitMargin: profitMarginGoal,
-    budgetDelta: maxRevenueBudget - mediaBudget,
-    budgetDeltaPercent: maxRevenueBudgetDeltaPercent,
-    revenueDelta: 0,
-    revenueDeltaPercent: 0,
-    profitDelta: calculateProfitDelta(maxRevenueRevenue, aov, netProfitPerOrder, profitMarginGoal),
+    budgetDelta: 0,
+    budgetDeltaPercent: 0,
+    revenueDelta: s2RevenueDelta,
+    revenueDeltaPercent: s2RevenueDeltaPercent,
+    profitDelta: isFinite(s2Profit) ? s2Profit : 0,
     isRecommended: false,
-    reasoning: `Högsta möjliga omsättning (${formatCurrency(maxRevenueRevenue)}) med bibehållen vinstmarginal på ${formatPercentNoSign(profitMarginGoal)}. Kräver ${maxRevenueBudgetDeltaPercent >= 0 ? 'ökning' : 'minskning'} av mediabudget med ${formatPercent(Math.abs(maxRevenueBudgetDeltaPercent) / 100)}.`,
+    reasoning: targetImpossible
+      ? `Önskad marginal överstiger täckningsbidrag. Inga lönsamma orders möjliga.`
+      : `Med nuvarande budget ${formatCurrency(mediaBudget)} och target ROAS ${targetROAS.toFixed(1)}x kan max ${formatCurrency(s2Revenue)} i omsättning uppnås.`,
   };
 
   // ========================================
-  // MAX PROFIT SCENARIO
+  // SCENARIO 3: Max vinst givet minsta acceptabla revenue
   // ========================================
-  // Högsta vinstmarginal (25% högre än mål) genom reducerad budget
-  // Accepterar lägre omsättning för högre marginal
+  const s3MinRevenue = revenueTarget * (minRevenuePercent / 100);
+  const s3Budget = isFinite(targetROAS) && targetROAS > 0
+    ? s3MinRevenue / targetROAS
+    : mediaBudget;
+  const s3Revenue = s3MinRevenue;
+  const s3COS = isFinite(targetROAS) ? (1 / targetROAS) * 100 : 0;
+  const s3Orders = aov > 0 ? s3Revenue / aov : 0;
+  const s3AdCostPerOrder = isFinite(targetROAS) && targetROAS > 0 ? aov / targetROAS : 0;
+  const s3ProfitPerOrder = contributionBeforeAds - s3AdCostPerOrder;
+  const s3Profit = s3Orders * s3ProfitPerOrder;
+  const s3RevenueDelta = s3Revenue - revenueTarget;
+  const s3RevenueDeltaPercent = revenueTarget > 0 ? (s3RevenueDelta / revenueTarget) * 100 : 0;
 
-  const maxProfitTargetMargin = Math.min(profitMarginGoal * 1.25, 0.90); // Cap at 90%
-  const maxProfitROAS = calculateTargetRoasForMargin(aov, netProfitPerOrder, maxProfitTargetMargin);
-  const maxProfitBudget = revenueTarget / maxProfitROAS;
-  const maxProfitRevenue = maxProfitBudget * maxProfitROAS;
-  const maxProfitCOS = isFinite(maxProfitROAS) ? (1 / maxProfitROAS) * 100 : 0;
-  const maxProfitRevenueDeltaPercent = ((maxProfitRevenue - revenueTarget) / revenueTarget) * 100;
-
-  const maxProfit: ReverseScenario = {
-    name: 'maxProfit',
-    label: 'Maximera vinst',
-    recommendedBudget: maxProfitBudget,
-    expectedRevenue: maxProfitRevenue,
-    requiredROAS: maxProfitROAS,
-    requiredCOS: maxProfitCOS,
-    achievedProfitMargin: maxProfitTargetMargin,
-    budgetDelta: maxProfitBudget - mediaBudget,
-    budgetDeltaPercent: ((maxProfitBudget - mediaBudget) / mediaBudget) * 100,
-    revenueDelta: maxProfitRevenue - revenueTarget,
-    revenueDeltaPercent: maxProfitRevenueDeltaPercent,
-    profitDelta: calculateProfitDelta(maxProfitRevenue, aov, netProfitPerOrder, maxProfitTargetMargin),
+  const maxProfitGivenMinRevenue: ReverseScenario = {
+    name: 'maxProfitGivenMinRevenue',
+    label: 'Max vinst',
+    recommendedBudget: isFinite(s3Budget) ? s3Budget : mediaBudget,
+    expectedRevenue: s3Revenue,
+    requiredROAS: targetROAS,
+    requiredCOS: s3COS,
+    achievedProfitMargin: profitMarginGoal,
+    budgetDelta: (isFinite(s3Budget) ? s3Budget : mediaBudget) - mediaBudget,
+    budgetDeltaPercent: isFinite(s3Budget)
+      ? ((s3Budget - mediaBudget) / mediaBudget) * 100
+      : 0,
+    revenueDelta: s3RevenueDelta,
+    revenueDeltaPercent: s3RevenueDeltaPercent,
+    profitDelta: isFinite(s3Profit) ? s3Profit : 0,
     isRecommended: false,
-    reasoning: `Högsta vinstmarginal (${formatPercentNoSign(maxProfitTargetMargin)}) genom reducerad mediabudget. Omsättning blir ${Math.abs(maxProfitRevenueDeltaPercent).toFixed(0)}% ${maxProfitRevenueDeltaPercent < 0 ? 'lägre' : 'högre'} än målsättning.`,
+    reasoning: targetImpossible
+      ? `Önskad marginal överstiger täckningsbidrag.`
+      : `Optimerar vinst vid ${minRevenuePercent}% av intäktsmålet (${formatCurrency(s3Revenue)}). Budget: ${formatCurrency(isFinite(s3Budget) ? s3Budget : 0)}, vinst: ${formatCurrency(isFinite(s3Profit) ? s3Profit : 0)}.`,
   };
 
   return {
-    balance,
-    maxRevenue,
-    maxProfit,
+    budgetForTarget,
+    maxRevenueGivenBudget,
+    maxProfitGivenMinRevenue,
   };
-}
-
-/**
- * Beräknar vinst (profit delta) för ett scenario.
- * profit = (revenue / aov) × netProfitPerOrder × profitMargin
- */
-function calculateProfitDelta(
-  revenue: number,
-  aov: number,
-  netProfitPerOrder: number,
-  profitMargin: number
-): number {
-  const orders = revenue / aov;
-  return orders * netProfitPerOrder * profitMargin;
 }
 
 /**
  * Uppdaterar scenarion med dynamisk rekommendation baserat på status.
  *
- * @param scenarios - Ursprungliga scenarion
- * @param status - Aktuell målstatus
- * @returns Uppdaterade scenarion med rätt rekommendation
+ * - achievable → recommend budgetForTarget
+ * - tight → recommend maxProfitGivenMinRevenue
+ * - impossible → recommend maxRevenueGivenBudget
  */
 export function updateScenarioRecommendations(
   scenarios: ScenarioSet,
   status: 'achievable' | 'tight' | 'impossible'
 ): ScenarioSet {
-  // Skapa kopior för att inte mutera original
   const updated = {
-    balance: { ...scenarios.balance },
-    maxRevenue: { ...scenarios.maxRevenue },
-    maxProfit: { ...scenarios.maxProfit },
+    budgetForTarget: { ...scenarios.budgetForTarget },
+    maxRevenueGivenBudget: { ...scenarios.maxRevenueGivenBudget },
+    maxProfitGivenMinRevenue: { ...scenarios.maxProfitGivenMinRevenue },
   };
 
-  // Återställ alla till false
-  updated.balance.isRecommended = false;
-  updated.maxRevenue.isRecommended = false;
-  updated.maxProfit.isRecommended = false;
+  // Reset all
+  updated.budgetForTarget.isRecommended = false;
+  updated.maxRevenueGivenBudget.isRecommended = false;
+  updated.maxProfitGivenMinRevenue.isRecommended = false;
 
-  // Sätt rekommendation baserat på status
   switch (status) {
     case 'achievable':
-      // Om målet är uppnåeligt, rekommendera balanserad (optimal approach)
-      updated.balance.isRecommended = true;
+      updated.budgetForTarget.isRecommended = true;
       break;
     case 'tight':
-      // Om det är tight, rekommendera max profit för att säkra marginalen
-      updated.maxProfit.isRecommended = true;
+      updated.maxProfitGivenMinRevenue.isRecommended = true;
       break;
     case 'impossible':
-      // Om omöjligt, rekommendera max revenue för att komma närmast målet
-      updated.maxRevenue.isRecommended = true;
+      updated.maxRevenueGivenBudget.isRecommended = true;
       break;
   }
 

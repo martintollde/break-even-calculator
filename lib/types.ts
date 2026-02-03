@@ -20,6 +20,7 @@ export interface CalculatorInput {
   paymentFee?: number;
   ltvMultiplier?: number;
   desiredProfitMargin?: number;
+  ltvMode?: boolean; // default false = "First-purchase ROAS"
 }
 
 export interface Assumption {
@@ -43,6 +44,11 @@ export interface CalculatorOutput {
   confidenceLevel: 'low' | 'medium' | 'high';
   assumptions: Assumption[];
   netProfitPerOrder: number;
+  unitEconomics: import('./unit-economics').UnitEconomics;
+  contributionBeforeAds: number;
+  contributionRate: number;
+  targetImpossible: boolean;
+  ltvMode: boolean;
 }
 
 /**
@@ -156,15 +162,18 @@ export interface ReverseInputs {
 
   /** Ekonomiska parametrar från framåt-kalkylatorn */
   economics: CalculatorInput;
+
+  /** Procent av intäktsmål som minsta acceptabla revenue (70-100) för scenario 3 */
+  minRevenuePercent?: number;
 }
 
 /**
  * Scenariotyp för bakåt-kalkylatorn.
- * - 'maxRevenue': Maximera intäkter givet budget
- * - 'maxProfit': Maximera vinst givet budget
- * - 'balance': Balanserad approach mellan intäkt och vinst
+ * - 'budgetForTarget': Budget krävd för att nå revenue target med önskad marginal
+ * - 'maxRevenueGivenBudget': Max revenue givet nuvarande budget och target ROAS
+ * - 'maxProfitGivenMinRevenue': Max vinst givet minsta acceptabla revenue
  */
-export type ScenarioName = 'maxRevenue' | 'maxProfit' | 'balance';
+export type ScenarioName = 'budgetForTarget' | 'maxRevenueGivenBudget' | 'maxProfitGivenMinRevenue';
 
 /**
  * Ett scenario i bakåt-kalkylatorn.
@@ -216,17 +225,17 @@ export interface ReverseScenario {
 
 /**
  * Uppsättning av scenarion för bakåt-kalkylatorn.
- * Innehåller tre strategier: max intäkt, max vinst, och balanserad.
+ * Tre distinkta analyser.
  */
 export interface ScenarioSet {
-  /** Maximera intäkter - högre spend, lägre marginal */
-  maxRevenue: ReverseScenario;
+  /** Budget krävd för att nå revenue target med önskad marginal */
+  budgetForTarget: ReverseScenario;
 
-  /** Maximera vinst - lägre spend, högre marginal */
-  maxProfit: ReverseScenario;
+  /** Max revenue givet nuvarande budget och target ROAS */
+  maxRevenueGivenBudget: ReverseScenario;
 
-  /** Balanserad approach - mellan max intäkt och max vinst */
-  balance: ReverseScenario;
+  /** Max vinst givet minsta acceptabla revenue */
+  maxProfitGivenMinRevenue: ReverseScenario;
 }
 
 /**

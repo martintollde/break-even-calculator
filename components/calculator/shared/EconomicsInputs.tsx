@@ -385,17 +385,40 @@ export function EconomicsInputs({
                 min={0}
               />
             </div>
-            <div className="mt-4 max-w-xs">
-              <NumericInput
-                label="LTV-multiplikator"
-                tooltip={tooltips.ltvMultiplier}
-                value={inputs.ltvMultiplier}
-                onChange={(val) => val !== undefined ? onUpdate('ltvMultiplier', val) : onClear('ltvMultiplier')}
-                onClear={() => onClear('ltvMultiplier')}
-                suffix="x"
-                placeholder={`Default: ${defaults.ltvMultiplier}x`}
-                min={1}
-              />
+            <div className="mt-4 space-y-4">
+              <div className="max-w-xs">
+                <NumericInput
+                  label="LTV-multiplikator"
+                  tooltip={tooltips.ltvMultiplier}
+                  value={inputs.ltvMultiplier}
+                  onChange={(val) => val !== undefined ? onUpdate('ltvMultiplier', val) : onClear('ltvMultiplier')}
+                  onClear={() => onClear('ltvMultiplier')}
+                  suffix="x"
+                  placeholder={`Default: ${defaults.ltvMultiplier}x`}
+                  min={1}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex items-center">
+                  <Label className="text-sm font-medium">ROAS-beräkningsläge</Label>
+                  <InfoTooltip text={tooltips.ltvMode} />
+                </div>
+                <ToggleGroup
+                  type="single"
+                  value={inputs.ltvMode ? 'ltv' : 'first'}
+                  onValueChange={(val) => {
+                    if (val) onUpdate('ltvMode', val === 'ltv');
+                  }}
+                  className="bg-muted rounded-md justify-start"
+                >
+                  <ToggleGroupItem value="first" className="text-xs px-3 data-[state=on]:bg-background data-[state=on]:shadow-sm">
+                    Första-köps ROAS
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="ltv" className="text-xs px-3 data-[state=on]:bg-background data-[state=on]:shadow-sm">
+                    LTV-justerad ROAS
+                  </ToggleGroupItem>
+                </ToggleGroup>
+              </div>
             </div>
           </AccordionContent>
         </AccordionItem>

@@ -8,11 +8,13 @@ import {
 } from './types';
 import { industryDefaults } from './defaults';
 import { generateScenarios, updateScenarioRecommendations } from './scenarios';
+import { computeUnitEconomics, computeRoasThresholds } from './unit-economics';
 
 export function calculateBreakEven(input: CalculatorInput): CalculatorOutput {
   const defaults = industryDefaults[input.industry];
   const assumptions: Assumption[] = [];
 
+  // Track assumptions for confidence scoring
   // Determine margin
   let margin: number;
   if (input.grossMargin !== undefined) {
@@ -37,29 +39,29 @@ export function calculateBreakEven(input: CalculatorInput): CalculatorOutput {
   });
 
   // Shipping cost
-  let shippingCost: number;
+  let shippingCostValue: number;
   if (input.shippingCostType === 'percent' && input.shippingCostPercent !== undefined) {
-    shippingCost = input.aov * (input.shippingCostPercent / 100);
+    shippingCostValue = input.aov * (input.shippingCostPercent / 100);
     assumptions.push({
       parameter: 'Fraktkostnad',
-      value: shippingCost,
-      displayValue: `${input.shippingCostPercent}% av AOV (${Math.round(shippingCost)} SEK)`,
+      value: shippingCostValue,
+      displayValue: `${input.shippingCostPercent}% av AOV (${Math.round(shippingCostValue)} SEK)`,
       source: 'user',
     });
   } else if (input.shippingCost !== undefined) {
-    shippingCost = input.shippingCost;
+    shippingCostValue = input.shippingCost;
     assumptions.push({
       parameter: 'Fraktkostnad',
-      value: shippingCost,
-      displayValue: `${shippingCost} SEK`,
+      value: shippingCostValue,
+      displayValue: `${shippingCostValue} SEK`,
       source: 'user',
     });
   } else {
-    shippingCost = defaults.shippingCost;
+    shippingCostValue = defaults.shippingCost;
     assumptions.push({
       parameter: 'Fraktkostnad',
-      value: shippingCost,
-      displayValue: `${shippingCost} SEK`,
+      value: shippingCostValue,
+      displayValue: `${shippingCostValue} SEK`,
       source: 'industry_default',
     });
   }
@@ -82,25 +84,27 @@ export function calculateBreakEven(input: CalculatorInput): CalculatorOutput {
     source: input.ltvMultiplier !== undefined ? 'user' : 'industry_default',
   });
 
-  // Calculations
-  const effectiveRevenue = input.aov * (1 - returnRate);
-  const paymentCost = input.aov * paymentFee;
-  const netProfitPerOrder = (effectiveRevenue * margin) - shippingCost - paymentCost;
+  // Compute unit economics using new engine
+  const ue = computeUnitEconomics(input);
 
-  const breakEvenRoas = netProfitPerOrder > 0 ? input.aov / netProfitPerOrder : Infinity;
+  // Desired profit margin (as fraction of AOV)
+  const desiredProfitMargin = input.desiredProfitMargin ?? 20;
+  const desiredMarginOfAov = desiredProfitMargin / 100;
+
+  // LTV mode
+  const ltvMode = input.ltvMode ?? false;
+
+  // Compute thresholds
+  const thresholds = computeRoasThresholds(ue, input.aov, desiredMarginOfAov, ltvMultiplier, ltvMode);
+
+  // Backward compat: netProfitPerOrder = contributionBeforeAds
+  const netProfitPerOrder = ue.contributionBeforeAds;
+
+  // CPA values
   const maxCpa = netProfitPerOrder;
   const maxCpaWithLtv = netProfitPerOrder * ltvMultiplier;
 
-  // Target ROAS based on desired profit margin
-  const desiredProfitMargin = input.desiredProfitMargin ?? 20;
-  const profitRetention = 1 - (desiredProfitMargin / 100);
-  const targetRoas = netProfitPerOrder > 0 ? input.aov / (netProfitPerOrder * profitRetention) : Infinity;
-
-  // COS values (inverse of ROAS)
-  const breakEvenCos = isFinite(breakEvenRoas) ? (1 / breakEvenRoas) * 100 : 0;
-  const targetCos = isFinite(targetRoas) ? (1 / targetRoas) * 100 : 0;
-
-  // Break-even ROAS with LTV
+  // Break-even ROAS with LTV (always computed for display, independent of ltvMode)
   const breakEvenRoasWithLtv = maxCpaWithLtv > 0 ? input.aov / maxCpaWithLtv : Infinity;
 
   // Confidence level
@@ -111,10 +115,10 @@ export function calculateBreakEven(input: CalculatorInput): CalculatorOutput {
   else confidenceLevel = 'low';
 
   return {
-    breakEvenRoas,
-    targetRoas,
-    breakEvenCos,
-    targetCos,
+    breakEvenRoas: thresholds.breakEvenRoas,
+    targetRoas: thresholds.targetRoas,
+    breakEvenCos: thresholds.breakEvenCos,
+    targetCos: thresholds.targetCos,
     desiredProfitMargin,
     maxCpa,
     maxCpaWithLtv,
@@ -122,6 +126,11 @@ export function calculateBreakEven(input: CalculatorInput): CalculatorOutput {
     confidenceLevel,
     assumptions,
     netProfitPerOrder,
+    unitEconomics: ue,
+    contributionBeforeAds: ue.contributionBeforeAds,
+    contributionRate: ue.contributionRate,
+    targetImpossible: thresholds.targetImpossible,
+    ltvMode,
   };
 }
 
@@ -132,43 +141,29 @@ export function calculateBreakEven(input: CalculatorInput): CalculatorOutput {
 /**
  * Bestämmer om målet är uppnåeligt baserat på ROAS-krav.
  *
- * Logik:
- * - requiredROAS <= targetROAS → 'achievable' (full lönsamhet möjlig)
- * - requiredROAS <= targetROAS × 2 → 'tight' (ambitiöst men möjligt med optimering)
- * - requiredROAS > targetROAS × 2 → 'impossible' (orealistiskt högt ROAS-krav)
- *
- * @param requiredROAS - ROAS som krävs för att nå intäktsmålet
- * @param breakEvenROAS - ROAS för att gå +/- 0
- * @param targetROAS - ROAS för att nå önskad vinstmarginal
- * @returns Status för måluppfyllnad
+ * Nya 3-reglers logik:
+ * - required < breakEven → 'achievable' (budget generös nog)
+ * - breakEven <= required < target → 'tight' (lönsamt men kräver optimering)
+ * - required >= target → 'impossible' (underfinansierat / för högt mål)
  */
 export function determineStatus(
   requiredROAS: number,
   breakEvenROAS: number,
   targetROAS: number
 ): GoalStatus {
-  // Under eller lika med target ROAS → full lönsamhet möjlig
-  if (requiredROAS <= targetROAS) {
+  if (requiredROAS < breakEvenROAS) {
     return 'achievable';
   }
 
-  // Upp till 2× target → ambitiöst men möjligt med optimering
-  if (requiredROAS <= targetROAS * 2) {
+  if (requiredROAS < targetROAS) {
     return 'tight';
   }
 
-  // Över 2× target → orealistiskt högt ROAS-krav
   return 'impossible';
 }
 
 /**
  * Genererar användarmeddelanden på svenska baserat på status.
- *
- * @param status - Aktuell målstatus
- * @param requiredROAS - ROAS som krävs
- * @param breakEvenROAS - Break-even ROAS
- * @param targetROAS - Target ROAS för önskad vinstmarginal
- * @returns Objekt med statusMessage och statusDetails
  */
 export function getStatusMessages(
   status: GoalStatus,
@@ -177,39 +172,30 @@ export function getStatusMessages(
   targetROAS: number
 ): { statusMessage: string; statusDetails: string } {
   const formatRoas = (roas: number) => roas.toFixed(2);
-  const marginAboveBreakeven = ((requiredROAS - breakEvenROAS) / breakEvenROAS) * 100;
-  const marginAboveTarget = ((requiredROAS - targetROAS) / targetROAS) * 100;
 
   switch (status) {
     case 'achievable':
       return {
-        statusMessage: '✅ Realistiskt uppnåeligt',
-        statusDetails: `Ditt krav på ${formatRoas(requiredROAS)}x ROAS ligger ${Math.abs(marginAboveBreakeven).toFixed(0)}% över break-even (${formatRoas(breakEvenROAS)}x) och under ditt targetmål (${formatRoas(targetROAS)}x). Du har god marginal för att nå önskad vinst.`,
+        statusMessage: '✅ Lönsamhet möjlig',
+        statusDetails: `Ditt krav på ${formatRoas(requiredROAS)}x ROAS ligger under break-even (${formatRoas(breakEvenROAS)}x). Budget är tillräcklig för att nå intäktsmålet med god marginal.`,
       };
 
     case 'tight':
       return {
-        statusMessage: '⚠️ Utmanande men möjligt',
-        statusDetails: `Ditt krav på ${formatRoas(requiredROAS)}x ROAS ligger ${marginAboveTarget.toFixed(0)}% över targetmålet (${formatRoas(targetROAS)}x). Du behöver optimera aggressivt eller justera målen.`,
+        statusMessage: '⚠️ Möjligt men kräver optimering',
+        statusDetails: `Ditt krav på ${formatRoas(requiredROAS)}x ROAS ligger mellan break-even (${formatRoas(breakEvenROAS)}x) och target (${formatRoas(targetROAS)}x). Lönsamt men kräver optimering för att nå önskad marginal.`,
       };
 
     case 'impossible':
       return {
-        statusMessage: '❌ Omöjligt med nuvarande ekonomi',
-        statusDetails: `Ditt krav på ${formatRoas(requiredROAS)}x ROAS är orealistiskt högt (mer än dubbla targetmålet ${formatRoas(targetROAS)}x). Sänk intäktsmålet eller öka budgeten.`,
+        statusMessage: '❌ Underfinansierat / för högt mål',
+        statusDetails: `Ditt krav på ${formatRoas(requiredROAS)}x ROAS överstiger target (${formatRoas(targetROAS)}x). Sänk intäktsmålet, öka budgeten, eller sänk önskad marginal.`,
       };
   }
 }
 
 /**
  * Huvudfunktion för bakåt-kalkylatorn.
- *
- * Beräknar vad som krävs för att nå ett intäktsmål givet en mediabudget.
- * Returnerar status, meddelanden och tre scenarion med olika strategier.
- *
- * @param inputs - Användarens indata med affärsmål och ekonomiska parametrar
- * @returns Komplett resultat med ROAS-krav, status och scenarion
- * @throws Error om indata är ogiltiga
  */
 export function calculateReverse(inputs: ReverseInputs): ReverseOutputs {
   // Validera indata
@@ -226,16 +212,14 @@ export function calculateReverse(inputs: ReverseInputs): ReverseOutputs {
     throw new Error('AOV måste vara större än 0');
   }
 
-  // Steg 1: Beräkna required ROAS från användarens mål
-  // required_ROAS = revenue_target / media_budget
+  // Steg 1: Beräkna required ROAS
   const requiredROAS = inputs.revenueTarget / inputs.mediaBudget;
   const requiredCOS = (1 / requiredROAS) * 100;
 
-  // Steg 2: Återanvänd framåt-kalkylatorn för att få break-even och target
-  // Vi sätter desiredProfitMargin baserat på profitMarginGoal
+  // Steg 2: Framåt-beräkning för break-even och target
   const forwardInputs: CalculatorInput = {
     ...inputs.economics,
-    desiredProfitMargin: inputs.profitMarginGoal * 100, // Konvertera från decimal till procent
+    desiredProfitMargin: inputs.profitMarginGoal * 100,
   };
   const forwardOutput = calculateBreakEven(forwardInputs);
 
@@ -245,7 +229,7 @@ export function calculateReverse(inputs: ReverseInputs): ReverseOutputs {
   // Steg 3: Bestäm status
   const status = determineStatus(requiredROAS, breakEvenROAS, targetROAS);
 
-  // Steg 4: Hämta statusmeddelanden
+  // Steg 4: Statusmeddelanden
   const { statusMessage, statusDetails } = getStatusMessages(
     status,
     requiredROAS,
@@ -257,7 +241,9 @@ export function calculateReverse(inputs: ReverseInputs): ReverseOutputs {
   const baseScenarios = generateScenarios(
     inputs,
     targetROAS,
-    forwardOutput.netProfitPerOrder
+    forwardOutput.netProfitPerOrder,
+    forwardOutput.unitEconomics.contributionBeforeAds,
+    forwardOutput.targetImpossible,
   );
 
   // Steg 6: Uppdatera rekommendationer baserat på status

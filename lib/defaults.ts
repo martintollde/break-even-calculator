@@ -67,4 +67,6 @@ export const tooltips = {
   maxCpaLtv: 'Max CPA om ni räknar in kundens livstidsvärde – tillåter högre förvärvskostnad för återkommande kunder.',
   breakEvenCos: 'Högsta tillåtna COS (Cost of Sale) för att gå break-even. Över detta värde förlorar ni pengar.',
   targetCos: 'COS som behövs för att nå önskad vinstmarginal. Sikta på att hålla er under detta värde.',
+  contributionBeforeAds: 'Täckningsbidrag per order före annonskostnad. Skillnaden mellan AOV och alla rörliga kostnader (produktkostnad inkl. returer, frakt, betalningsavgift).',
+  ltvMode: 'Första-köps ROAS räknar bara på första ordern. LTV-justerad ROAS tar hänsyn till kundens livstidsvärde och tillåter högre förvärvskostnad.',
 };

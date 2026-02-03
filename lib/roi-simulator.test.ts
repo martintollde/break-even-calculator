@@ -20,8 +20,8 @@ function createTestInputs(overrides?: Partial<ReverseInputs>): ReverseInputs {
 
 function createTestScenario(overrides?: Partial<ReverseScenario>): ReverseScenario {
   return {
-    name: 'balance',
-    label: 'Balanserad',
+    name: 'budgetForTarget',
+    label: 'Budget för mål',
     recommendedBudget: 1200000,
     expectedRevenue: 10000000,
     requiredROAS: 4.0,

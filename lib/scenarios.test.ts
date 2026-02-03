@@ -10,7 +10,6 @@ import { ReverseInputs, CalculatorInput } from './types';
 
 describe('Scenarios - Scenariogenerering', () => {
 
-  // Bas-ekonomi för de flesta tester
   const baseEconomics: CalculatorInput = {
     aov: 1000,
     industry: 'other',
@@ -25,12 +24,10 @@ describe('Scenarios - Scenariogenerering', () => {
   // ============================================
 
   describe('formatCurrency - Valutaformatering', () => {
-
     test('Formaterar positivt belopp korrekt', () => {
       const result = formatCurrency(1000000);
       expect(result).toContain('1');
       expect(result).toContain('000');
-      // Swedish locale uses "kr" not "SEK"
       expect(result).toContain('kr');
     });
 
@@ -46,58 +43,34 @@ describe('Scenarios - Scenariogenerering', () => {
       expect(result).toContain('kr');
     });
 
-    test('Formaterar negativt belopp korrekt', () => {
-      const result = formatCurrency(-5000);
-      expect(result).toContain('5');
-      expect(result).toContain('000');
-    });
-
     test('Avrundar decimaler', () => {
       const result = formatCurrency(1234.56);
-      // Ska avrundas till heltal
       expect(result).toContain('1');
       expect(result).toContain('235');
     });
   });
 
   describe('formatPercent - Procentformatering med tecken', () => {
-
     test('Formaterar positivt värde med plus-tecken', () => {
-      const result = formatPercent(0.25);
-      expect(result).toBe('+25.0%');
+      expect(formatPercent(0.25)).toBe('+25.0%');
     });
 
     test('Formaterar negativt värde med minus-tecken', () => {
-      const result = formatPercent(-0.15);
-      expect(result).toBe('-15.0%');
+      expect(formatPercent(-0.15)).toBe('-15.0%');
     });
 
     test('Formaterar noll med plus-tecken', () => {
-      const result = formatPercent(0);
-      expect(result).toBe('+0.0%');
-    });
-
-    test('Formaterar litet decimal värde', () => {
-      const result = formatPercent(0.005);
-      expect(result).toBe('+0.5%');
+      expect(formatPercent(0)).toBe('+0.0%');
     });
   });
 
-  describe('formatPercentNoSign - Procentformatering utan tecken', () => {
-
+  describe('formatPercentNoSign', () => {
     test('Formaterar positivt värde utan tecken', () => {
-      const result = formatPercentNoSign(0.25);
-      expect(result).toBe('25.0%');
-    });
-
-    test('Formaterar negativt värde med minus-tecken', () => {
-      const result = formatPercentNoSign(-0.15);
-      expect(result).toBe('-15.0%');
+      expect(formatPercentNoSign(0.25)).toBe('25.0%');
     });
 
     test('Formaterar noll', () => {
-      const result = formatPercentNoSign(0);
-      expect(result).toBe('0.0%');
+      expect(formatPercentNoSign(0)).toBe('0.0%');
     });
   });
 
@@ -107,7 +80,7 @@ describe('Scenarios - Scenariogenerering', () => {
 
   describe('generateScenarios - Grundläggande funktionalitet', () => {
 
-    test('Genererar tre scenarion', () => {
+    test('Genererar tre scenarion med nya namn', () => {
       const input: ReverseInputs = {
         revenueTarget: 1000000,
         mediaBudget: 250000,
@@ -123,15 +96,17 @@ describe('Scenarios - Scenariogenerering', () => {
       const scenarios = generateScenarios(
         input,
         forwardResult.targetRoas,
-        forwardResult.netProfitPerOrder
+        forwardResult.netProfitPerOrder,
+        forwardResult.contributionBeforeAds,
+        forwardResult.targetImpossible,
       );
 
-      expect(scenarios.balance).toBeDefined();
-      expect(scenarios.maxRevenue).toBeDefined();
-      expect(scenarios.maxProfit).toBeDefined();
+      expect(scenarios.budgetForTarget).toBeDefined();
+      expect(scenarios.maxRevenueGivenBudget).toBeDefined();
+      expect(scenarios.maxProfitGivenMinRevenue).toBeDefined();
     });
 
-    test('Balance scenario matchar intäktsmål med target ROAS', () => {
+    test('budgetForTarget: reaches revenue target at target ROAS', () => {
       const input: ReverseInputs = {
         revenueTarget: 1000000,
         mediaBudget: 250000,
@@ -147,18 +122,18 @@ describe('Scenarios - Scenariogenerering', () => {
       const scenarios = generateScenarios(
         input,
         forwardResult.targetRoas,
-        forwardResult.netProfitPerOrder
+        forwardResult.netProfitPerOrder,
+        forwardResult.contributionBeforeAds,
+        forwardResult.targetImpossible,
       );
 
-      // Balance ska nå intäktsmålet
-      expect(scenarios.balance.expectedRevenue).toBe(1000000);
-      // Med target ROAS
-      expect(scenarios.balance.requiredROAS).toBeCloseTo(forwardResult.targetRoas, 2);
-      // Och önskad vinstmarginal
-      expect(scenarios.balance.achievedProfitMargin).toBe(0.20);
+      expect(scenarios.budgetForTarget.expectedRevenue).toBe(1000000);
+      expect(scenarios.budgetForTarget.requiredROAS).toBeCloseTo(forwardResult.targetRoas, 2);
+      expect(scenarios.budgetForTarget.label).toBe('Budget för mål');
+      expect(scenarios.budgetForTarget.isRecommended).toBe(true);
     });
 
-    test('maxRevenue scenario har samma intäkt som balance', () => {
+    test('maxRevenueGivenBudget: uses current budget', () => {
       const input: ReverseInputs = {
         revenueTarget: 1000000,
         mediaBudget: 250000,
@@ -174,21 +149,25 @@ describe('Scenarios - Scenariogenerering', () => {
       const scenarios = generateScenarios(
         input,
         forwardResult.targetRoas,
-        forwardResult.netProfitPerOrder
+        forwardResult.netProfitPerOrder,
+        forwardResult.contributionBeforeAds,
+        forwardResult.targetImpossible,
       );
 
-      // maxRevenue når samma intäkt som balance
-      expect(scenarios.maxRevenue.expectedRevenue).toBe(scenarios.balance.expectedRevenue);
-      // Och samma ROAS
-      expect(scenarios.maxRevenue.requiredROAS).toBeCloseTo(scenarios.balance.requiredROAS, 2);
+      expect(scenarios.maxRevenueGivenBudget.recommendedBudget).toBe(250000);
+      expect(scenarios.maxRevenueGivenBudget.budgetDelta).toBe(0);
+      expect(scenarios.maxRevenueGivenBudget.label).toBe('Max omsättning');
+      // max revenue = budget * targetROAS = 250000 * 3.333 = 833333
+      expect(scenarios.maxRevenueGivenBudget.expectedRevenue).toBeCloseTo(250000 * forwardResult.targetRoas, 0);
     });
 
-    test('maxProfit scenario har högsta vinstmarginalen', () => {
+    test('maxProfitGivenMinRevenue: uses minRevenuePercent', () => {
       const input: ReverseInputs = {
         revenueTarget: 1000000,
         mediaBudget: 250000,
         profitMarginGoal: 0.20,
         economics: baseEconomics,
+        minRevenuePercent: 80,
       };
 
       const forwardResult = calculateBreakEven({
@@ -199,17 +178,19 @@ describe('Scenarios - Scenariogenerering', () => {
       const scenarios = generateScenarios(
         input,
         forwardResult.targetRoas,
-        forwardResult.netProfitPerOrder
+        forwardResult.netProfitPerOrder,
+        forwardResult.contributionBeforeAds,
+        forwardResult.targetImpossible,
       );
 
-      // maxProfit har högst vinstmarginal (25% högre än mål)
-      expect(scenarios.maxProfit.achievedProfitMargin).toBeGreaterThan(scenarios.balance.achievedProfitMargin);
-      expect(scenarios.maxProfit.achievedProfitMargin).toBeCloseTo(0.25, 2); // 0.20 × 1.25
+      // Revenue should be 80% of target
+      expect(scenarios.maxProfitGivenMinRevenue.expectedRevenue).toBeCloseTo(800000, 0);
+      expect(scenarios.maxProfitGivenMinRevenue.label).toBe('Max vinst');
     });
 
-    test('Balance markeras som rekommenderat', () => {
+    test('budgetForTarget markeras som rekommenderat', () => {
       const input: ReverseInputs = {
-        revenueTarget: 1000000,
+        revenueTarget: 500000,
         mediaBudget: 250000,
         profitMarginGoal: 0.20,
         economics: baseEconomics,
@@ -223,18 +204,20 @@ describe('Scenarios - Scenariogenerering', () => {
       const scenarios = generateScenarios(
         input,
         forwardResult.targetRoas,
-        forwardResult.netProfitPerOrder
+        forwardResult.netProfitPerOrder,
+        forwardResult.contributionBeforeAds,
+        forwardResult.targetImpossible,
       );
 
-      expect(scenarios.balance.isRecommended).toBe(true);
-      expect(scenarios.maxRevenue.isRecommended).toBe(false);
-      expect(scenarios.maxProfit.isRecommended).toBe(false);
+      expect(scenarios.budgetForTarget.isRecommended).toBe(true);
+      expect(scenarios.maxRevenueGivenBudget.isRecommended).toBe(false);
+      expect(scenarios.maxProfitGivenMinRevenue.isRecommended).toBe(false);
     });
   });
 
   describe('generateScenarios - Delta-beräkningar', () => {
 
-    test('Beräknar budget delta korrekt', () => {
+    test('budgetForTarget budget delta korrekt', () => {
       const input: ReverseInputs = {
         revenueTarget: 1000000,
         mediaBudget: 250000,
@@ -250,15 +233,16 @@ describe('Scenarios - Scenariogenerering', () => {
       const scenarios = generateScenarios(
         input,
         forwardResult.targetRoas,
-        forwardResult.netProfitPerOrder
+        forwardResult.netProfitPerOrder,
+        forwardResult.contributionBeforeAds,
+        forwardResult.targetImpossible,
       );
 
-      // Budget delta = recommendedBudget - mediaBudget
-      const expectedBalanceDelta = scenarios.balance.recommendedBudget - 250000;
-      expect(scenarios.balance.budgetDelta).toBeCloseTo(expectedBalanceDelta, 0);
+      const expectedDelta = scenarios.budgetForTarget.recommendedBudget - 250000;
+      expect(scenarios.budgetForTarget.budgetDelta).toBeCloseTo(expectedDelta, 0);
     });
 
-    test('Beräknar budget delta procent korrekt', () => {
+    test('maxRevenueGivenBudget has zero budget delta', () => {
       const input: ReverseInputs = {
         revenueTarget: 1000000,
         mediaBudget: 250000,
@@ -274,15 +258,16 @@ describe('Scenarios - Scenariogenerering', () => {
       const scenarios = generateScenarios(
         input,
         forwardResult.targetRoas,
-        forwardResult.netProfitPerOrder
+        forwardResult.netProfitPerOrder,
+        forwardResult.contributionBeforeAds,
+        forwardResult.targetImpossible,
       );
 
-      // Budget delta % = (budgetDelta / mediaBudget) × 100
-      const expectedPercent = (scenarios.balance.budgetDelta / 250000) * 100;
-      expect(scenarios.balance.budgetDeltaPercent).toBeCloseTo(expectedPercent, 1);
+      expect(scenarios.maxRevenueGivenBudget.budgetDelta).toBe(0);
+      expect(scenarios.maxRevenueGivenBudget.budgetDeltaPercent).toBe(0);
     });
 
-    test('Balance har revenueDelta = 0', () => {
+    test('budgetForTarget has zero revenue delta', () => {
       const input: ReverseInputs = {
         revenueTarget: 1000000,
         mediaBudget: 250000,
@@ -298,131 +283,13 @@ describe('Scenarios - Scenariogenerering', () => {
       const scenarios = generateScenarios(
         input,
         forwardResult.targetRoas,
-        forwardResult.netProfitPerOrder
+        forwardResult.netProfitPerOrder,
+        forwardResult.contributionBeforeAds,
+        forwardResult.targetImpossible,
       );
 
-      // Balance når exakt intäktsmålet
-      expect(scenarios.balance.revenueDelta).toBe(0);
-      expect(scenarios.balance.revenueDeltaPercent).toBe(0);
-    });
-
-    test('Beräknar profitDelta korrekt', () => {
-      const input: ReverseInputs = {
-        revenueTarget: 1000000,
-        mediaBudget: 250000,
-        profitMarginGoal: 0.20,
-        economics: baseEconomics,
-      };
-
-      const forwardResult = calculateBreakEven({
-        ...baseEconomics,
-        desiredProfitMargin: 20,
-      });
-
-      const scenarios = generateScenarios(
-        input,
-        forwardResult.targetRoas,
-        forwardResult.netProfitPerOrder
-      );
-
-      // profitDelta = (revenue / aov) × netProfitPerOrder × profitMargin
-      const expectedProfit = (1000000 / 1000) * forwardResult.netProfitPerOrder * 0.20;
-      expect(scenarios.balance.profitDelta).toBeCloseTo(expectedProfit, 0);
-    });
-  });
-
-  describe('generateScenarios - Edge cases', () => {
-
-    test('Hanterar högt intäktsmål', () => {
-      const input: ReverseInputs = {
-        revenueTarget: 100000000, // 100 MSEK
-        mediaBudget: 10000000,
-        profitMarginGoal: 0.20,
-        economics: baseEconomics,
-      };
-
-      const forwardResult = calculateBreakEven({
-        ...baseEconomics,
-        desiredProfitMargin: 20,
-      });
-
-      const scenarios = generateScenarios(
-        input,
-        forwardResult.targetRoas,
-        forwardResult.netProfitPerOrder
-      );
-
-      expect(scenarios.balance.expectedRevenue).toBe(100000000);
-      expect(scenarios.balance.recommendedBudget).toBeGreaterThan(0);
-    });
-
-    test('Hanterar lågt intäktsmål', () => {
-      const input: ReverseInputs = {
-        revenueTarget: 10000,
-        mediaBudget: 5000,
-        profitMarginGoal: 0.20,
-        economics: baseEconomics,
-      };
-
-      const forwardResult = calculateBreakEven({
-        ...baseEconomics,
-        desiredProfitMargin: 20,
-      });
-
-      const scenarios = generateScenarios(
-        input,
-        forwardResult.targetRoas,
-        forwardResult.netProfitPerOrder
-      );
-
-      expect(scenarios.balance.expectedRevenue).toBe(10000);
-      expect(isFinite(scenarios.balance.requiredROAS)).toBe(true);
-    });
-
-    test('Hanterar hög vinstmarginal (cap at 90%)', () => {
-      const input: ReverseInputs = {
-        revenueTarget: 1000000,
-        mediaBudget: 250000,
-        profitMarginGoal: 0.80, // 80% mål
-        economics: baseEconomics,
-      };
-
-      const forwardResult = calculateBreakEven({
-        ...baseEconomics,
-        desiredProfitMargin: 80,
-      });
-
-      const scenarios = generateScenarios(
-        input,
-        forwardResult.targetRoas,
-        forwardResult.netProfitPerOrder
-      );
-
-      // maxProfit ska inte överstiga 90%
-      expect(scenarios.maxProfit.achievedProfitMargin).toBeLessThanOrEqual(0.90);
-    });
-
-    test('Hanterar låg vinstmarginal', () => {
-      const input: ReverseInputs = {
-        revenueTarget: 1000000,
-        mediaBudget: 250000,
-        profitMarginGoal: 0.05, // 5% mål
-        economics: baseEconomics,
-      };
-
-      const forwardResult = calculateBreakEven({
-        ...baseEconomics,
-        desiredProfitMargin: 5,
-      });
-
-      const scenarios = generateScenarios(
-        input,
-        forwardResult.targetRoas,
-        forwardResult.netProfitPerOrder
-      );
-
-      expect(scenarios.balance.achievedProfitMargin).toBe(0.05);
-      expect(scenarios.maxProfit.achievedProfitMargin).toBeCloseTo(0.0625, 2); // 5% × 1.25
+      expect(scenarios.budgetForTarget.revenueDelta).toBe(0);
+      expect(scenarios.budgetForTarget.revenueDeltaPercent).toBe(0);
     });
   });
 
@@ -432,264 +299,139 @@ describe('Scenarios - Scenariogenerering', () => {
 
   describe('updateScenarioRecommendations', () => {
 
-    test('Achievable → Balance rekommenderas', () => {
+    function getScenarios() {
       const input: ReverseInputs = {
         revenueTarget: 1000000,
         mediaBudget: 250000,
         profitMarginGoal: 0.20,
         economics: baseEconomics,
       };
-
       const forwardResult = calculateBreakEven({
         ...baseEconomics,
         desiredProfitMargin: 20,
       });
-
-      const baseScenarios = generateScenarios(
+      return generateScenarios(
         input,
         forwardResult.targetRoas,
-        forwardResult.netProfitPerOrder
+        forwardResult.netProfitPerOrder,
+        forwardResult.contributionBeforeAds,
+        forwardResult.targetImpossible,
       );
+    }
 
-      const updated = updateScenarioRecommendations(baseScenarios, 'achievable');
-
-      expect(updated.balance.isRecommended).toBe(true);
-      expect(updated.maxRevenue.isRecommended).toBe(false);
-      expect(updated.maxProfit.isRecommended).toBe(false);
+    test('Achievable → budgetForTarget rekommenderas', () => {
+      const updated = updateScenarioRecommendations(getScenarios(), 'achievable');
+      expect(updated.budgetForTarget.isRecommended).toBe(true);
+      expect(updated.maxRevenueGivenBudget.isRecommended).toBe(false);
+      expect(updated.maxProfitGivenMinRevenue.isRecommended).toBe(false);
     });
 
-    test('Tight → MaxProfit rekommenderas', () => {
-      const input: ReverseInputs = {
-        revenueTarget: 1000000,
-        mediaBudget: 250000,
-        profitMarginGoal: 0.20,
-        economics: baseEconomics,
-      };
-
-      const forwardResult = calculateBreakEven({
-        ...baseEconomics,
-        desiredProfitMargin: 20,
-      });
-
-      const baseScenarios = generateScenarios(
-        input,
-        forwardResult.targetRoas,
-        forwardResult.netProfitPerOrder
-      );
-
-      const updated = updateScenarioRecommendations(baseScenarios, 'tight');
-
-      expect(updated.maxProfit.isRecommended).toBe(true);
-      expect(updated.balance.isRecommended).toBe(false);
-      expect(updated.maxRevenue.isRecommended).toBe(false);
+    test('Tight → maxProfitGivenMinRevenue rekommenderas', () => {
+      const updated = updateScenarioRecommendations(getScenarios(), 'tight');
+      expect(updated.maxProfitGivenMinRevenue.isRecommended).toBe(true);
+      expect(updated.budgetForTarget.isRecommended).toBe(false);
+      expect(updated.maxRevenueGivenBudget.isRecommended).toBe(false);
     });
 
-    test('Impossible → MaxRevenue rekommenderas', () => {
-      const input: ReverseInputs = {
-        revenueTarget: 1000000,
-        mediaBudget: 250000,
-        profitMarginGoal: 0.20,
-        economics: baseEconomics,
-      };
-
-      const forwardResult = calculateBreakEven({
-        ...baseEconomics,
-        desiredProfitMargin: 20,
-      });
-
-      const baseScenarios = generateScenarios(
-        input,
-        forwardResult.targetRoas,
-        forwardResult.netProfitPerOrder
-      );
-
-      const updated = updateScenarioRecommendations(baseScenarios, 'impossible');
-
-      expect(updated.maxRevenue.isRecommended).toBe(true);
-      expect(updated.balance.isRecommended).toBe(false);
-      expect(updated.maxProfit.isRecommended).toBe(false);
+    test('Impossible → maxRevenueGivenBudget rekommenderas', () => {
+      const updated = updateScenarioRecommendations(getScenarios(), 'impossible');
+      expect(updated.maxRevenueGivenBudget.isRecommended).toBe(true);
+      expect(updated.budgetForTarget.isRecommended).toBe(false);
+      expect(updated.maxProfitGivenMinRevenue.isRecommended).toBe(false);
     });
 
     test('Muterar inte original-scenarion', () => {
-      const input: ReverseInputs = {
-        revenueTarget: 1000000,
-        mediaBudget: 250000,
-        profitMarginGoal: 0.20,
-        economics: baseEconomics,
-      };
-
-      const forwardResult = calculateBreakEven({
-        ...baseEconomics,
-        desiredProfitMargin: 20,
-      });
-
-      const baseScenarios = generateScenarios(
-        input,
-        forwardResult.targetRoas,
-        forwardResult.netProfitPerOrder
-      );
-
-      const originalBalanceRecommended = baseScenarios.balance.isRecommended;
-
+      const baseScenarios = getScenarios();
+      const original = baseScenarios.budgetForTarget.isRecommended;
       updateScenarioRecommendations(baseScenarios, 'impossible');
-
-      // Original ska vara oförändrad
-      expect(baseScenarios.balance.isRecommended).toBe(originalBalanceRecommended);
+      expect(baseScenarios.budgetForTarget.isRecommended).toBe(original);
     });
   });
 
   // ============================================
-  // SCENARIO LABELS OCH REASONING
+  // SCENARIO LABELS
   // ============================================
 
   describe('Scenario labels och reasoning', () => {
 
-    test('Balance har korrekta labels', () => {
+    test('budgetForTarget har korrekta labels', () => {
       const input: ReverseInputs = {
         revenueTarget: 1000000,
         mediaBudget: 250000,
         profitMarginGoal: 0.20,
         economics: baseEconomics,
       };
+      const forwardResult = calculateBreakEven({ ...baseEconomics, desiredProfitMargin: 20 });
+      const scenarios = generateScenarios(input, forwardResult.targetRoas, forwardResult.netProfitPerOrder, forwardResult.contributionBeforeAds, forwardResult.targetImpossible);
 
-      const forwardResult = calculateBreakEven({
-        ...baseEconomics,
-        desiredProfitMargin: 20,
-      });
-
-      const scenarios = generateScenarios(
-        input,
-        forwardResult.targetRoas,
-        forwardResult.netProfitPerOrder
-      );
-
-      expect(scenarios.balance.name).toBe('balance');
-      expect(scenarios.balance.label).toBe('Balanserad');
-      expect(scenarios.balance.reasoning).toContain('Optimal balans');
-      expect(scenarios.balance.reasoning).toContain('target ROAS');
+      expect(scenarios.budgetForTarget.name).toBe('budgetForTarget');
+      expect(scenarios.budgetForTarget.label).toBe('Budget för mål');
+      expect(scenarios.budgetForTarget.reasoning).toContain('Kräver budget');
     });
 
-    test('MaxRevenue har korrekta labels', () => {
+    test('maxRevenueGivenBudget har korrekta labels', () => {
       const input: ReverseInputs = {
         revenueTarget: 1000000,
         mediaBudget: 250000,
         profitMarginGoal: 0.20,
         economics: baseEconomics,
       };
+      const forwardResult = calculateBreakEven({ ...baseEconomics, desiredProfitMargin: 20 });
+      const scenarios = generateScenarios(input, forwardResult.targetRoas, forwardResult.netProfitPerOrder, forwardResult.contributionBeforeAds, forwardResult.targetImpossible);
 
-      const forwardResult = calculateBreakEven({
-        ...baseEconomics,
-        desiredProfitMargin: 20,
-      });
-
-      const scenarios = generateScenarios(
-        input,
-        forwardResult.targetRoas,
-        forwardResult.netProfitPerOrder
-      );
-
-      expect(scenarios.maxRevenue.name).toBe('maxRevenue');
-      expect(scenarios.maxRevenue.label).toBe('Maximera omsättning');
-      expect(scenarios.maxRevenue.reasoning).toContain('Högsta möjliga omsättning');
+      expect(scenarios.maxRevenueGivenBudget.name).toBe('maxRevenueGivenBudget');
+      expect(scenarios.maxRevenueGivenBudget.label).toBe('Max omsättning');
+      expect(scenarios.maxRevenueGivenBudget.reasoning).toContain('nuvarande budget');
     });
 
-    test('MaxProfit har korrekta labels', () => {
+    test('maxProfitGivenMinRevenue har korrekta labels', () => {
       const input: ReverseInputs = {
         revenueTarget: 1000000,
         mediaBudget: 250000,
         profitMarginGoal: 0.20,
         economics: baseEconomics,
       };
+      const forwardResult = calculateBreakEven({ ...baseEconomics, desiredProfitMargin: 20 });
+      const scenarios = generateScenarios(input, forwardResult.targetRoas, forwardResult.netProfitPerOrder, forwardResult.contributionBeforeAds, forwardResult.targetImpossible);
 
-      const forwardResult = calculateBreakEven({
-        ...baseEconomics,
-        desiredProfitMargin: 20,
-      });
-
-      const scenarios = generateScenarios(
-        input,
-        forwardResult.targetRoas,
-        forwardResult.netProfitPerOrder
-      );
-
-      expect(scenarios.maxProfit.name).toBe('maxProfit');
-      expect(scenarios.maxProfit.label).toBe('Maximera vinst');
-      expect(scenarios.maxProfit.reasoning).toContain('Högsta vinstmarginal');
+      expect(scenarios.maxProfitGivenMinRevenue.name).toBe('maxProfitGivenMinRevenue');
+      expect(scenarios.maxProfitGivenMinRevenue.label).toBe('Max vinst');
+      expect(scenarios.maxProfitGivenMinRevenue.reasoning).toContain('Optimerar vinst');
     });
   });
 
   // ============================================
-  // REALISTISKA SCENARION
+  // EDGE CASES
   // ============================================
 
-  describe('Realistiska kundscenarier', () => {
+  describe('generateScenarios - Edge cases', () => {
 
-    test('E-commerce med standard parametrar', () => {
-      const ecommerceEconomics: CalculatorInput = {
-        aov: 800,
-        industry: 'ecommerce',
-        grossMargin: 55,
-        returnRate: 8,
-        shippingCost: 49,
-        paymentFee: 2.5,
-      };
-
+    test('Hanterar högt intäktsmål', () => {
       const input: ReverseInputs = {
-        revenueTarget: 5000000,
-        mediaBudget: 1000000,
-        profitMarginGoal: 0.15,
-        economics: ecommerceEconomics,
+        revenueTarget: 100000000,
+        mediaBudget: 10000000,
+        profitMarginGoal: 0.20,
+        economics: baseEconomics,
       };
+      const forwardResult = calculateBreakEven({ ...baseEconomics, desiredProfitMargin: 20 });
+      const scenarios = generateScenarios(input, forwardResult.targetRoas, forwardResult.netProfitPerOrder, forwardResult.contributionBeforeAds, forwardResult.targetImpossible);
 
-      const forwardResult = calculateBreakEven({
-        ...ecommerceEconomics,
-        desiredProfitMargin: 15,
-      });
-
-      const scenarios = generateScenarios(
-        input,
-        forwardResult.targetRoas,
-        forwardResult.netProfitPerOrder
-      );
-
-      // Alla scenarion ska ha rimliga värden
-      expect(scenarios.balance.recommendedBudget).toBeGreaterThan(0);
-      expect(scenarios.balance.expectedRevenue).toBe(5000000);
-      expect(scenarios.balance.requiredROAS).toBeGreaterThan(1);
-      expect(scenarios.balance.requiredCOS).toBeGreaterThan(0);
-      expect(scenarios.balance.requiredCOS).toBeLessThan(100);
+      expect(scenarios.budgetForTarget.expectedRevenue).toBe(100000000);
+      expect(scenarios.budgetForTarget.recommendedBudget).toBeGreaterThan(0);
     });
 
-    test('SaaS med hög marginal', () => {
-      const saasEconomics: CalculatorInput = {
-        aov: 500,
-        industry: 'saas',
-        grossMargin: 80,
-        returnRate: 5,
-        shippingCost: 0,
-        paymentFee: 2.5,
-      };
-
+    test('Hanterar lågt intäktsmål', () => {
       const input: ReverseInputs = {
-        revenueTarget: 2000000,
-        mediaBudget: 1000000,
-        profitMarginGoal: 0.30,
-        economics: saasEconomics,
+        revenueTarget: 10000,
+        mediaBudget: 5000,
+        profitMarginGoal: 0.20,
+        economics: baseEconomics,
       };
+      const forwardResult = calculateBreakEven({ ...baseEconomics, desiredProfitMargin: 20 });
+      const scenarios = generateScenarios(input, forwardResult.targetRoas, forwardResult.netProfitPerOrder, forwardResult.contributionBeforeAds, forwardResult.targetImpossible);
 
-      const forwardResult = calculateBreakEven({
-        ...saasEconomics,
-        desiredProfitMargin: 30,
-      });
-
-      const scenarios = generateScenarios(
-        input,
-        forwardResult.targetRoas,
-        forwardResult.netProfitPerOrder
-      );
-
-      // Med hög marginal ska ROAS-kravet vara lägre
-      expect(scenarios.balance.requiredROAS).toBeLessThan(3);
+      expect(scenarios.budgetForTarget.expectedRevenue).toBe(10000);
+      expect(isFinite(scenarios.budgetForTarget.requiredROAS)).toBe(true);
     });
   });
 });

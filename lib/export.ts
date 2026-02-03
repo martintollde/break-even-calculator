@@ -29,6 +29,7 @@ export function generateShareUrl(inputs: CalculatorInput): string {
   if (inputs.paymentFee !== undefined) params.set('pf', String(inputs.paymentFee));
   if (inputs.ltvMultiplier !== undefined) params.set('ltv', String(inputs.ltvMultiplier));
   if (inputs.desiredProfitMargin !== undefined) params.set('dpm', String(inputs.desiredProfitMargin));
+  if (inputs.ltvMode) params.set('ltvMode', '1');
   return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
 }
 
@@ -65,6 +66,8 @@ export function parseShareUrl(searchParams: URLSearchParams): Partial<Calculator
   if (ltv) result.ltvMultiplier = Number(ltv);
   const dpm = searchParams.get('dpm');
   if (dpm) result.desiredProfitMargin = Number(dpm);
+  const ltvModeParam = searchParams.get('ltvMode');
+  if (ltvModeParam === '1') result.ltvMode = true;
 
   return result;
 }
@@ -86,6 +89,12 @@ export function generateCopyText(inputs: CalculatorInput, outputs: CalculatorOut
     `Max CPA: ${formatCurrency(outputs.maxCpa)}`,
     `Max CPA (med LTV): ${formatCurrency(outputs.maxCpaWithLtv)}`,
     `Break-even ROAS (med LTV): ${formatNumber(outputs.breakEvenRoasWithLtv)}x`,
+    '',
+    '── Enhetsekonomi ──',
+    `Täckningsbidrag före ads: ${formatCurrency(outputs.contributionBeforeAds)}`,
+    `Täckningsgrad: ${formatNumber(outputs.contributionRate * 100)}%`,
+    outputs.targetImpossible ? `⚠️ Önskad marginal överstiger täckningsbidrag` : '',
+    outputs.ltvMode ? `LTV-justerad: Ja` : '',
     '',
     '── Antaganden ──',
     ...outputs.assumptions.map(a => {

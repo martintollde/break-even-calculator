@@ -133,6 +133,45 @@ export function ResultsSection({ outputs }: ResultsSectionProps) {
         {viewModeExplanation[viewMode]}
       </p>
 
+      {/* Target impossible warning */}
+      {outputs.targetImpossible && (
+        <div className="rounded-lg border border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20 p-4">
+          <p className="text-yellow-800 dark:text-yellow-200 text-sm font-medium">
+            ⚠️ Önskad marginal överstiger täckningsbidrag
+          </p>
+          <p className="text-yellow-700/80 dark:text-yellow-300/80 text-xs mt-1">
+            Target ROAS kan inte beräknas. Sänk önskad vinstmarginal eller förbättra era marginaler.
+          </p>
+        </div>
+      )}
+
+      {/* Unit economics per order */}
+      <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+        <h4 className="text-sm font-semibold">Enhetsekonomi per order</h4>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+          <div>
+            <div className="text-xs text-muted-foreground">Produktkostnad (eff.)</div>
+            <div className="font-semibold">{formatCurrency(outputs.unitEconomics.productCostEffective)}</div>
+            <div className="text-xs text-muted-foreground">{formatNumber((outputs.unitEconomics.productCostEffective / outputs.unitEconomics.aov) * 100)}% av AOV</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground">Fraktkostnad</div>
+            <div className="font-semibold">{formatCurrency(outputs.unitEconomics.shippingCost)}</div>
+            <div className="text-xs text-muted-foreground">{formatNumber((outputs.unitEconomics.shippingCost / outputs.unitEconomics.aov) * 100)}% av AOV</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground">Betalningsavgift</div>
+            <div className="font-semibold">{formatCurrency(outputs.unitEconomics.paymentFee)}</div>
+            <div className="text-xs text-muted-foreground">{formatNumber((outputs.unitEconomics.paymentFee / outputs.unitEconomics.aov) * 100)}% av AOV</div>
+          </div>
+          <div className="bg-background rounded-md p-2 -m-1">
+            <div className="text-xs text-muted-foreground font-medium">Täckningsbidrag före ads</div>
+            <div className="font-bold text-lg">{formatCurrency(outputs.contributionBeforeAds)}</div>
+            <div className="text-xs text-muted-foreground">{formatNumber(outputs.contributionRate * 100)}% av AOV</div>
+          </div>
+        </div>
+      </div>
+
       {/* Key metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {isRoas ? (
@@ -146,7 +185,7 @@ export function ResultsSection({ outputs }: ResultsSectionProps) {
             />
             <ResultCard
               title="Target ROAS"
-              value={`${formatNumber(outputs.targetRoas)}x`}
+              value={outputs.targetImpossible ? '—' : `${formatNumber(outputs.targetRoas)}x`}
               subtitle={`${outputs.desiredProfitMargin}% vinstmarginal`}
               tooltip={tooltips.targetRoas}
             />
@@ -162,7 +201,7 @@ export function ResultsSection({ outputs }: ResultsSectionProps) {
             />
             <ResultCard
               title="Target COS"
-              value={`${formatNumber(outputs.targetCos)}%`}
+              value={outputs.targetImpossible ? '—' : `${formatNumber(outputs.targetCos)}%`}
               subtitle={`${outputs.desiredProfitMargin}% vinstmarginal`}
               tooltip={tooltips.targetCos}
             />
@@ -190,6 +229,11 @@ export function ResultsSection({ outputs }: ResultsSectionProps) {
           LTV-justerat
           <span className="text-xs font-normal text-muted-foreground">(om kund handlar igen)</span>
           <InfoTooltip text={tooltips.maxCpaLtv} />
+          {outputs.ltvMode && (
+            <span className="ml-2 inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+              LTV-justerad
+            </span>
+          )}
         </h4>
         <div className="grid grid-cols-2 gap-4">
           <div>

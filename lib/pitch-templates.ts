@@ -155,7 +155,7 @@ function generateImpossibleScript(data: TemplateData): PitchScript {
   return {
     opening: `${roleGreeting} Vi har analyserat förutsättningarna för ${data.companyName} och vill vara transparenta med vad som är möjligt. Vi ser stor potential men rekommenderar en justerad strategi.`,
 
-    problem: `Utmaningen för företag${sizeContext} inom ${data.industryName} är att intäktsmålet på ${formatCurrency(data.inputs.revenueTarget)} ligger över vad som är lönsamt att uppnå enbart via paid media. ROAS-kravet på ${data.outputs.requiredROAS.toFixed(1)}x överstiger break-even på ${data.outputs.breakEvenROAS.toFixed(1)}x, vilket innebär att varje extra krona i ad spend minskar er marginal.`,
+    problem: `Utmaningen för företag${sizeContext} inom ${data.industryName} är att intäktsmålet på ${formatCurrency(data.inputs.revenueTarget)} ligger över vad som är lönsamt att uppnå enbart via paid media. ROAS-kravet på ${data.outputs.requiredROAS.toFixed(1)}x överstiger target på ${data.outputs.targetROAS.toFixed(1)}x, vilket innebär att varje extra krona i ad spend minskar er marginal.`,
 
     solution: `Vi rekommenderar en stegvis approach: Börja med en mediabudget på ${data.budgetFormatted} fokuserad på lönsamma segment. Parallellt arbetar vi med att förbättra konverteringsgraden och ordervärdet. Med en ROAS på ${data.roasFormatted}x och marginal på ${data.marginFormatted} bygger vi en lönsam bas att skala från.`,
 

@@ -137,6 +137,15 @@ function RoasComparisonBar({
 }
 
 /**
+ * Short recommendation label per status.
+ */
+const statusLabels: Record<GoalStatus, string> = {
+  achievable: 'Lönsamhet möjlig',
+  tight: 'Möjligt men kräver optimering',
+  impossible: 'Underfinansierat / för högt mål',
+};
+
+/**
  * StatusIndicator visar resultatstatus för bakåt-kalkylatorn.
  * Inkluderar status-ikon, meddelande, detaljer och ROAS-jämförelse.
  */
@@ -155,6 +164,9 @@ export function StatusIndicator({ outputs }: StatusIndicatorProps) {
               <h3 className={`font-semibold text-lg ${config.textColor}`}>
                 {outputs.statusMessage}
               </h3>
+              <p className={`text-xs mt-1 ${config.textColor} opacity-80`}>
+                {statusLabels[outputs.status]}
+              </p>
             </div>
           </div>
         </CardContent>

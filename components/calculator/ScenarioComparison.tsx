@@ -149,9 +149,9 @@ export function ScenarioComparison({
   onSelectScenario,
 }: ScenarioComparisonProps) {
   const scenarioList: { key: ScenarioName; scenario: ReverseScenario }[] = [
-    { key: 'balance', scenario: scenarios.balance },
-    { key: 'maxRevenue', scenario: scenarios.maxRevenue },
-    { key: 'maxProfit', scenario: scenarios.maxProfit },
+    { key: 'budgetForTarget', scenario: scenarios.budgetForTarget },
+    { key: 'maxRevenueGivenBudget', scenario: scenarios.maxRevenueGivenBudget },
+    { key: 'maxProfitGivenMinRevenue', scenario: scenarios.maxProfitGivenMinRevenue },
   ];
 
   return (

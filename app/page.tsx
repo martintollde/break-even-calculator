@@ -11,6 +11,8 @@ import { PitchGenerator } from '@/components/calculator/PitchGenerator';
 import { ROISimulator } from '@/components/calculator/roi/ROISimulator';
 import { CalculatorInput, ReverseInputs, ReverseOutputs, ScenarioName } from '@/lib/types';
 import { calculateReverse } from '@/lib/calculations';
+import { HistoricalCalibration } from '@/components/calculator/HistoricalCalibration';
+import { RegressionResult } from '@/lib/historical-calibration';
 
 export default function Home() {
   const [showHelp, setShowHelp] = useState(false);
@@ -21,8 +23,13 @@ export default function Home() {
   const [profitMarginGoal, setProfitMarginGoal] = useState<number>(20);
   const [economics, setEconomics] = useState<CalculatorInput>(defaultEconomics);
   const [reverseOutputs, setReverseOutputs] = useState<ReverseOutputs | null>(null);
-  const [selectedScenario, setSelectedScenario] = useState<ScenarioName>('balance');
+  const [selectedScenario, setSelectedScenario] = useState<ScenarioName>('budgetForTarget');
   const [reverseError, setReverseError] = useState<string | null>(null);
+  const [calibrationResult, setCalibrationResult] = useState<RegressionResult | null>(null);
+
+  const handleCalibrationResult = useCallback((result: RegressionResult | null) => {
+    setCalibrationResult(result);
+  }, []);
 
   // Handlers for reverse calculator
   const handleRevenueTargetChange = useCallback((value: number) => {
@@ -88,12 +95,12 @@ export default function Home() {
       const result = calculateReverse(inputs);
       setReverseOutputs(result);
 
-      if (result.scenarios.balance.isRecommended) {
-        setSelectedScenario('balance');
-      } else if (result.scenarios.maxProfit.isRecommended) {
-        setSelectedScenario('maxProfit');
-      } else if (result.scenarios.maxRevenue.isRecommended) {
-        setSelectedScenario('maxRevenue');
+      if (result.scenarios.budgetForTarget.isRecommended) {
+        setSelectedScenario('budgetForTarget');
+      } else if (result.scenarios.maxProfitGivenMinRevenue.isRecommended) {
+        setSelectedScenario('maxProfitGivenMinRevenue');
+      } else if (result.scenarios.maxRevenueGivenBudget.isRecommended) {
+        setSelectedScenario('maxRevenueGivenBudget');
       }
     } catch (err) {
       setReverseError(err instanceof Error ? err.message : 'Ett fel uppstod vid beräkning');
@@ -204,22 +211,32 @@ export default function Home() {
               </TabsContent>
 
               <TabsContent value="reverse">
-                <ReverseCalculator
-                  revenueTarget={revenueTarget}
-                  mediaBudget={mediaBudget}
-                  profitMarginGoal={profitMarginGoal}
-                  economics={economics}
-                  outputs={reverseOutputs}
-                  selectedScenario={selectedScenario}
-                  onRevenueTargetChange={handleRevenueTargetChange}
-                  onMediaBudgetChange={handleMediaBudgetChange}
-                  onProfitMarginGoalChange={handleProfitMarginGoalChange}
-                  onEconomicsUpdate={handleEconomicsUpdate}
-                  onEconomicsClear={handleEconomicsClear}
-                  onCalculate={handleCalculate}
-                  onScenarioSelect={setSelectedScenario}
-                  error={reverseError}
-                />
+                <div className="space-y-6">
+                  <ReverseCalculator
+                    revenueTarget={revenueTarget}
+                    mediaBudget={mediaBudget}
+                    profitMarginGoal={profitMarginGoal}
+                    economics={economics}
+                    outputs={reverseOutputs}
+                    selectedScenario={selectedScenario}
+                    onRevenueTargetChange={handleRevenueTargetChange}
+                    onMediaBudgetChange={handleMediaBudgetChange}
+                    onProfitMarginGoalChange={handleProfitMarginGoalChange}
+                    onEconomicsUpdate={handleEconomicsUpdate}
+                    onEconomicsClear={handleEconomicsClear}
+                    onCalculate={handleCalculate}
+                    onScenarioSelect={setSelectedScenario}
+                    error={reverseError}
+                  />
+                  <HistoricalCalibration
+                    onCalibrationResult={handleCalibrationResult}
+                  />
+                  {calibrationResult && (
+                    <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+                      Kalibrerad modell aktiv (R² = {calibrationResult.rSquared.toFixed(2)}, b = {calibrationResult.b.toFixed(3)})
+                    </div>
+                  )}
+                </div>
               </TabsContent>
 
               <TabsContent value="pitch">

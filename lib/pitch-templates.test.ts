@@ -1,10 +1,6 @@
 import { generatePitchScript } from './pitch-templates';
 import { ReverseInputs, ReverseOutputs, ReverseScenario, ClientContext } from './types';
 
-// ============================================
-// TEST HELPERS
-// ============================================
-
 function createTestInputs(overrides?: Partial<ReverseInputs>): ReverseInputs {
   return {
     revenueTarget: 10000000,
@@ -18,10 +14,10 @@ function createTestInputs(overrides?: Partial<ReverseInputs>): ReverseInputs {
   };
 }
 
-function createTestScenario(name: 'balance' | 'maxRevenue' | 'maxProfit'): ReverseScenario {
+function createTestScenario(name: 'budgetForTarget' | 'maxRevenueGivenBudget' | 'maxProfitGivenMinRevenue'): ReverseScenario {
   return {
     name,
-    label: name === 'balance' ? 'Balanserad' : name === 'maxRevenue' ? 'Maximera omsättning' : 'Maximera vinst',
+    label: name === 'budgetForTarget' ? 'Budget för mål' : name === 'maxRevenueGivenBudget' ? 'Max omsättning' : 'Max vinst',
     recommendedBudget: 1200000,
     expectedRevenue: 10000000,
     requiredROAS: 4.0,
@@ -32,24 +28,24 @@ function createTestScenario(name: 'balance' | 'maxRevenue' | 'maxProfit'): Rever
     revenueDelta: 0,
     revenueDeltaPercent: 0,
     profitDelta: 500000,
-    isRecommended: name === 'balance',
+    isRecommended: name === 'budgetForTarget',
     reasoning: 'Test reasoning',
   };
 }
 
 function createTestOutputs(status: 'achievable' | 'tight' | 'impossible'): ReverseOutputs {
   return {
-    requiredROAS: status === 'achievable' ? 3.0 : status === 'tight' ? 5.0 : 1.5,
+    requiredROAS: status === 'achievable' ? 1.5 : status === 'tight' ? 2.5 : 5.0,
     requiredCOS: 10.0,
-    breakEvenROAS: 2.67,
+    breakEvenROAS: 2.0,
     targetROAS: 3.33,
     status,
     statusMessage: 'Test',
     statusDetails: 'Test details',
     scenarios: {
-      balance: createTestScenario('balance'),
-      maxRevenue: createTestScenario('maxRevenue'),
-      maxProfit: createTestScenario('maxProfit'),
+      budgetForTarget: createTestScenario('budgetForTarget'),
+      maxRevenueGivenBudget: createTestScenario('maxRevenueGivenBudget'),
+      maxProfitGivenMinRevenue: createTestScenario('maxProfitGivenMinRevenue'),
     },
   };
 }
@@ -65,17 +61,13 @@ function createFullContext(): ClientContext {
   };
 }
 
-// ============================================
-// ALL STATUS BRANCHES
-// ============================================
-
 describe('generatePitchScript', () => {
   describe('achievable status', () => {
     const inputs = createTestInputs();
     const outputs = createTestOutputs('achievable');
 
     test('generates all 5 script sections', () => {
-      const script = generatePitchScript(inputs, outputs, 'balance');
+      const script = generatePitchScript(inputs, outputs, 'budgetForTarget');
       expect(script.opening).toBeTruthy();
       expect(script.problem).toBeTruthy();
       expect(script.solution).toBeTruthy();
@@ -84,18 +76,18 @@ describe('generatePitchScript', () => {
     });
 
     test('uses optimistic tone in opening', () => {
-      const script = generatePitchScript(inputs, outputs, 'balance');
+      const script = generatePitchScript(inputs, outputs, 'budgetForTarget');
       expect(script.opening).toContain('tillväxtmöjlighet');
     });
 
     test('includes formatted revenue in solution', () => {
-      const script = generatePitchScript(inputs, outputs, 'balance');
+      const script = generatePitchScript(inputs, outputs, 'budgetForTarget');
       expect(script.solution).toContain('10');
       expect(script.solution).toContain('kr');
     });
 
     test('has at least 3 objection handlers', () => {
-      const script = generatePitchScript(inputs, outputs, 'balance');
+      const script = generatePitchScript(inputs, outputs, 'budgetForTarget');
       expect(script.objectionHandling.length).toBeGreaterThanOrEqual(3);
     });
   });
@@ -105,7 +97,7 @@ describe('generatePitchScript', () => {
     const outputs = createTestOutputs('tight');
 
     test('generates all 5 script sections', () => {
-      const script = generatePitchScript(inputs, outputs, 'balance');
+      const script = generatePitchScript(inputs, outputs, 'budgetForTarget');
       expect(script.opening).toBeTruthy();
       expect(script.problem).toBeTruthy();
       expect(script.solution).toBeTruthy();
@@ -114,12 +106,12 @@ describe('generatePitchScript', () => {
     });
 
     test('uses pragmatic tone in opening', () => {
-      const script = generatePitchScript(inputs, outputs, 'balance');
+      const script = generatePitchScript(inputs, outputs, 'budgetForTarget');
       expect(script.opening).toContain('ambitiöst');
     });
 
     test('mentions optimization in solution', () => {
-      const script = generatePitchScript(inputs, outputs, 'balance');
+      const script = generatePitchScript(inputs, outputs, 'budgetForTarget');
       expect(script.solution).toContain('marginal');
     });
   });
@@ -129,7 +121,7 @@ describe('generatePitchScript', () => {
     const outputs = createTestOutputs('impossible');
 
     test('generates all 5 script sections', () => {
-      const script = generatePitchScript(inputs, outputs, 'balance');
+      const script = generatePitchScript(inputs, outputs, 'budgetForTarget');
       expect(script.opening).toBeTruthy();
       expect(script.problem).toBeTruthy();
       expect(script.solution).toBeTruthy();
@@ -138,19 +130,15 @@ describe('generatePitchScript', () => {
     });
 
     test('uses consultative tone in opening', () => {
-      const script = generatePitchScript(inputs, outputs, 'balance');
+      const script = generatePitchScript(inputs, outputs, 'budgetForTarget');
       expect(script.opening).toContain('transparenta');
     });
 
     test('recommends strategic adjustment in solution', () => {
-      const script = generatePitchScript(inputs, outputs, 'balance');
+      const script = generatePitchScript(inputs, outputs, 'budgetForTarget');
       expect(script.solution).toContain('stegvis');
     });
   });
-
-  // ============================================
-  // CLIENT CONTEXT TESTS
-  // ============================================
 
   describe('with full ClientContext', () => {
     const inputs = createTestInputs();
@@ -158,18 +146,18 @@ describe('generatePitchScript', () => {
     const context = createFullContext();
 
     test('uses company name in script', () => {
-      const script = generatePitchScript(inputs, outputs, 'balance', context);
+      const script = generatePitchScript(inputs, outputs, 'budgetForTarget', context);
       expect(script.opening).toContain('TestAB');
       expect(script.closing).toContain('TestAB');
     });
 
     test('uses CMO role greeting', () => {
-      const script = generatePitchScript(inputs, outputs, 'balance', context);
+      const script = generatePitchScript(inputs, outputs, 'budgetForTarget', context);
       expect(script.opening).toContain('marknadschef');
     });
 
     test('uses company size context', () => {
-      const script = generatePitchScript(inputs, outputs, 'balance', context);
+      const script = generatePitchScript(inputs, outputs, 'budgetForTarget', context);
       expect(script.problem).toContain('storlek');
     });
   });
@@ -179,12 +167,12 @@ describe('generatePitchScript', () => {
     const outputs = createTestOutputs('achievable');
 
     test('uses default greeting without context', () => {
-      const script = generatePitchScript(inputs, outputs, 'balance');
+      const script = generatePitchScript(inputs, outputs, 'budgetForTarget');
       expect(script.opening).toContain('Hej!');
     });
 
     test('uses "ert företag" as default company name', () => {
-      const script = generatePitchScript(inputs, outputs, 'balance');
+      const script = generatePitchScript(inputs, outputs, 'budgetForTarget');
       expect(script.opening).toContain('ert företag');
     });
   });
@@ -195,7 +183,7 @@ describe('generatePitchScript', () => {
 
     test('uses CEO-specific greeting', () => {
       const context: ClientContext = { industry: 'ecommerce', decisionMakerRole: 'ceo' };
-      const script = generatePitchScript(inputs, outputs, 'balance', context);
+      const script = generatePitchScript(inputs, outputs, 'budgetForTarget', context);
       expect(script.opening).toContain('VD');
     });
   });
@@ -206,62 +194,50 @@ describe('generatePitchScript', () => {
 
     test('uses marketing manager greeting', () => {
       const context: ClientContext = { industry: 'ecommerce', decisionMakerRole: 'marketingManager' };
-      const script = generatePitchScript(inputs, outputs, 'balance', context);
+      const script = generatePitchScript(inputs, outputs, 'budgetForTarget', context);
       expect(script.opening).toContain('marknadsansvarig');
     });
   });
-
-  // ============================================
-  // FORMATTED VALUES IN OUTPUT
-  // ============================================
 
   describe('formatted values', () => {
     const inputs = createTestInputs();
     const outputs = createTestOutputs('achievable');
 
     test('ROAS value appears in solution', () => {
-      const script = generatePitchScript(inputs, outputs, 'balance');
+      const script = generatePitchScript(inputs, outputs, 'budgetForTarget');
       expect(script.solution).toContain('4.0');
     });
 
     test('break-even ROAS appears in objection handling', () => {
-      const script = generatePitchScript(inputs, outputs, 'balance');
+      const script = generatePitchScript(inputs, outputs, 'budgetForTarget');
       const allObjections = script.objectionHandling.join(' ');
-      expect(allObjections).toContain('2.7');
+      expect(allObjections).toContain('2.0');
     });
   });
-
-  // ============================================
-  // DIFFERENT SCENARIOS
-  // ============================================
 
   describe('different scenario selection', () => {
     const inputs = createTestInputs();
     const outputs = createTestOutputs('achievable');
 
-    test('generates script for maxRevenue scenario', () => {
-      const script = generatePitchScript(inputs, outputs, 'maxRevenue');
+    test('generates script for maxRevenueGivenBudget scenario', () => {
+      const script = generatePitchScript(inputs, outputs, 'maxRevenueGivenBudget');
       expect(script.opening).toBeTruthy();
       expect(script.solution).toBeTruthy();
     });
 
-    test('generates script for maxProfit scenario', () => {
-      const script = generatePitchScript(inputs, outputs, 'maxProfit');
+    test('generates script for maxProfitGivenMinRevenue scenario', () => {
+      const script = generatePitchScript(inputs, outputs, 'maxProfitGivenMinRevenue');
       expect(script.opening).toBeTruthy();
       expect(script.solution).toBeTruthy();
     });
   });
-
-  // ============================================
-  // SWEDISH TEXT VERIFICATION
-  // ============================================
 
   describe('Swedish text content', () => {
     const inputs = createTestInputs();
     const outputs = createTestOutputs('achievable');
 
     test('contains Swedish keywords', () => {
-      const script = generatePitchScript(inputs, outputs, 'balance');
+      const script = generatePitchScript(inputs, outputs, 'budgetForTarget');
       const allText = [
         script.opening,
         script.problem,
@@ -270,7 +246,6 @@ describe('generatePitchScript', () => {
         script.closing,
       ].join(' ');
 
-      // Check for common Swedish words
       expect(allText).toMatch(/kr/);
       expect(allText).toMatch(/ROAS/);
       expect(allText).toMatch(/(omsättning|intäkt|vinst|marginal)/i);
